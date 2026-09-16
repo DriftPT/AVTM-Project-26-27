@@ -31,10 +31,7 @@
 #include "mathUtility.h"
 #include "model.h"
 #include "texture.h"
-
-// ============== Novo ==============
 #include "Environment.h"
-// ==================================
 
 using namespace std;
 
@@ -68,8 +65,8 @@ float alpha = 57.0f, _beta = 18.0f;
 float r = 45.0f;
 
 // Projections Booleans
-bool orthoProj = true;
-bool perspProj = false;
+bool orthoProj = false;
+bool perspProj = true;
 
 // Auxiliary variables
 bool fixedCamera = false;
@@ -127,7 +124,7 @@ void changeSize(int w, int h)
 
 	float ratio;
 	// Prevent a divide by zero, when window is too short
-	if (h == 0)
+	if(h == 0)
 		h = 1;
 	// set the viewport to be the entire window
 	glViewport(0, 0, w, h);
@@ -206,6 +203,481 @@ void static setCameraBehind()
 	mu.lookAt(camX, camY, camZ, carPosX, carPosY, carPosZ, 0, 1, 0); // the sum of the car postion makes the camera follow it
 }
 
+
+
+// ------------------------------------------------------------
+// Mesh IDs inside renderer.myMeshes
+#define MESH_CUBE      0
+#define MESH_PAWN      1
+#define MESH_SPHERE    2
+#define MESH_CYLINDER  3
+#define MESH_CONE      4
+#define MESH_TORUS     5
+
+// ------------------------------------------------------------
+// Car state
+// For now the car does not move
+
+float carX = 0.0f;
+float carZ = 0.0f;
+float carAngle = 0.0f;
+
+// Top of the floor in the current scene
+float carBaseY = env.getRoadSurfaceY();
+
+// ------------------------------------------------------------
+// Car keyboard state
+
+bool keyW = false;
+bool keyS = false;
+bool keyA = false;
+bool keyD = false;
+
+// ------------------------------------------------------------
+// Car movement
+
+float carVelocity = 0.0f;
+float carAcceleration = 0.0f;
+
+// Direction of the car.
+// For now the car points towards +Z.
+float carDirection[3] = { 0.0f, 0.0f, 1.0f };
+
+// Movement values
+const float ACCELERATION = 3.0f;
+const float DECELERATION = 2.0f;
+
+const float MAX_FORWARD_SPEED = 7.0f;
+const float MAX_BACKWARD_SPEED = -3.5f;
+
+// Used to calculate the time between frames
+int lastCarUpdateTime = 0;
+
+
+// ------------------------------------------------------------
+// MATERIALS
+
+struct CarMaterial
+{
+	float ambient[4];
+	float diffuse[4];
+	float specular[4];
+	float shininess;
+};
+
+// Car body - vivid light sports blue
+CarMaterial bodyMaterial = {
+	{ 0.06f, 0.15f, 0.25f, 1.0f },
+	{ 0.22f, 0.62f, 0.95f, 1.0f },
+	{ 0.55f, 0.55f, 0.60f, 1.0f },
+	45.0f
+};
+
+
+// Bumper - dark plastic
+CarMaterial bumperMaterial = {
+	{ 0.07f, 0.07f, 0.08f, 1.0f }, 
+	{ 0.28f, 0.30f, 0.33f, 1.0f },  
+	{ 0.22f, 0.22f, 0.24f, 1.0f },  
+	18.0f
+};
+
+
+// Wheels - matte black
+CarMaterial wheelMaterial = {
+	{ 0.05f, 0.05f, 0.05f, 1.0f },   
+	{ 0.12f, 0.12f, 0.13f, 1.0f },  
+	{ 0.10f, 0.10f, 0.10f, 1.0f },   
+	8.0f
+};
+
+
+// Headlights - warm white
+CarMaterial headlightMaterial = {
+	{ 0.15f, 0.15f, 0.12f, 1.0f },
+	{ 1.00f, 0.95f, 0.78f, 1.0f },
+	{ 0.90f, 0.90f, 0.85f, 1.0f },
+	70.0f
+};
+
+
+// Exhaust - metallic grey
+CarMaterial exhaustMaterial = {
+	{ 0.10f, 0.10f, 0.10f, 1.0f },
+	{ 0.42f, 0.44f, 0.48f, 1.0f },
+	{ 0.85f, 0.85f, 0.88f, 1.0f },
+	80.0f
+};
+
+
+// Windshield - light blue / glass-like
+CarMaterial glassMaterial = {
+	{ 0.12f, 0.14f, 0.16f, 1.0f },   // ambient
+	{ 0.82f, 0.90f, 0.98f, 1.0f },   // diffuse
+	{ 1.00f, 1.00f, 1.00f, 1.0f },   // specular
+	100.0f                           // shininess
+};
+
+
+void setMeshMaterial(int meshID, const CarMaterial& material)
+{
+	memcpy(
+		renderer.myMeshes[meshID].mat.ambient,
+		material.ambient,
+		4 * sizeof(float)
+	);
+
+	memcpy(
+		renderer.myMeshes[meshID].mat.diffuse,
+		material.diffuse,
+		4 * sizeof(float)
+	);
+
+	memcpy(
+		renderer.myMeshes[meshID].mat.specular,
+		material.specular,
+		4 * sizeof(float)
+	);
+
+	renderer.myMeshes[meshID].mat.shininess =
+		material.shininess;
+}
+
+// ------------------------------------------------------------
+// Aux function to render a mesh using the current MODEL matrix.
+
+void drawMesh(int meshID, int texMode = 0)
+{
+	dataMesh data;
+
+	mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+	mu.computeNormalMatrix3x3();
+
+	data.meshID = meshID;
+	data.texMode = texMode;
+	data.vm = mu.get(gmu::VIEW_MODEL);
+	data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+	data.normal = mu.getNormalMatrix();
+	renderer.renderMesh(data);
+}
+
+
+void updateCar(float dt)
+{
+	// ------------------------------------------------------------
+	// ACCELERATION
+
+	if (keyW && !keyS)
+	{
+		// Accelerate forward
+		carAcceleration = ACCELERATION;
+	}
+	else if (keyS && !keyW)
+	{
+		// Accelerate backwards
+		carAcceleration = -ACCELERATION;
+	}
+	else
+	{
+		// Neither W nor S is pressed: gradually reduce the velocity.
+
+		if (carVelocity > 0.0f)
+		{
+			carAcceleration = -DECELERATION;
+		}
+		else if (carVelocity < 0.0f)
+		{
+			carAcceleration = DECELERATION;
+		}
+		else
+		{
+			carAcceleration = 0.0f;
+		}
+	}
+
+
+	// ------------------------------------------------------------
+	// UPDATE VELOCITY
+
+	float oldVelocity = carVelocity;
+
+	carVelocity += carAcceleration * dt;
+
+
+	// When no acceleration key is pressed, stop at exactly zero instead of crossing it.
+	if (!keyW && !keyS)
+	{
+		if ((oldVelocity > 0.0f && carVelocity < 0.0f) ||
+			(oldVelocity < 0.0f && carVelocity > 0.0f))
+		{
+			carVelocity = 0.0f;
+			carAcceleration = 0.0f;
+		}
+	}
+
+
+	// ------------------------------------------------------------
+	// LIMIT MAXIMUM SPEED
+
+	if (carVelocity > MAX_FORWARD_SPEED)
+		carVelocity = MAX_FORWARD_SPEED;
+
+	if (carVelocity < MAX_BACKWARD_SPEED)
+		carVelocity = MAX_BACKWARD_SPEED;
+
+
+	// ------------------------------------------------------------
+	// UPDATE POSITION
+
+	carX += carDirection[0] * carVelocity * dt;
+	carZ += carDirection[2] * carVelocity * dt;
+}
+
+void drawCar()
+{
+	// ------------------------------------------------------------
+	// CAR TRANSFORMATION
+	//
+	// Everything drawn between this push/pop belongs to the car.
+	// Later carX, carZ and carAngle will move the whole car.
+
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, carX, carBaseY, carZ);
+	mu.rotate(gmu::MODEL, carAngle, 0.0f, 1.0f, 0.0f);
+
+
+	// ------------------------------------------------------------
+	// MAIN BODY
+
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, 0.0f, 0.75f, 0.0f);
+	mu.scale(gmu::MODEL, 3.0f, 0.6f, 5.0f);
+
+	// Cube is originally defined from 0 to 1,
+	// so centre it around its local origin.
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+
+	setMeshMaterial(MESH_CUBE, bodyMaterial);
+	drawMesh(MESH_CUBE);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// ------------------------------------------------------------
+	// CABIN
+
+	mu.pushMatrix(gmu::MODEL);
+
+	// Slightly towards the rear of the car
+	mu.translate(gmu::MODEL, 0.0f, 1.5f, -0.35f);
+	mu.scale(gmu::MODEL, 2.2f, 0.9f, 2.3f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+
+	setMeshMaterial(MESH_CUBE, bodyMaterial);
+	drawMesh(MESH_CUBE);
+
+	mu.popMatrix(gmu::MODEL);
+
+	// ------------------------------------------------------------
+	// FRONT WINDSHIELD
+
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, 0.0f, 1.50f, 0.81f);
+	mu.scale(gmu::MODEL, 1.70f, 0.60f, 0.05f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+
+	setMeshMaterial(MESH_CUBE, glassMaterial);
+	drawMesh(MESH_CUBE);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// ------------------------------------------------------------
+	// WHEELS
+	renderer.setTexUnit(0, 7);
+
+	// Front left
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, -1.55f, 0.45f, 1.65f);
+	mu.rotate(gmu::MODEL, 90.0f, 0.0f, 0.0f, 1.0f);
+	mu.scale(gmu::MODEL, 0.30f, 0.30f, 0.30f);
+
+	setMeshMaterial(MESH_TORUS, wheelMaterial);
+	drawMesh(MESH_TORUS, 2);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// Front right
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, 1.55f, 0.45f, 1.65f);
+	mu.rotate(gmu::MODEL, 90.0f, 0.0f, 0.0f, 1.0f);
+	mu.scale(gmu::MODEL, 0.30f, 0.30f, 0.30f);
+
+	setMeshMaterial(MESH_TORUS, wheelMaterial);
+	drawMesh(MESH_TORUS, 2);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// Rear left
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, -1.55f, 0.45f, -1.65f);
+	mu.rotate(gmu::MODEL, 90.0f, 0.0f, 0.0f, 1.0f);
+	mu.scale(gmu::MODEL, 0.30f, 0.30f, 0.30f);
+
+	setMeshMaterial(MESH_TORUS, wheelMaterial);
+	drawMesh(MESH_TORUS, 2);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// Rear right
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, 1.55f, 0.45f, -1.65f);
+	mu.rotate(gmu::MODEL, 90.0f, 0.0f, 0.0f, 1.0f);
+	mu.scale(gmu::MODEL, 0.30f, 0.30f, 0.30f);
+
+	setMeshMaterial(MESH_TORUS, wheelMaterial);
+	drawMesh(MESH_TORUS, 2);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// ------------------------------------------------------------
+	// FRONT BUMPER
+
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, 0.0f, 0.55f, 2.55f);
+	mu.scale(gmu::MODEL, 3.2f, 0.25f, 0.20f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+
+	setMeshMaterial(MESH_CUBE, bumperMaterial);
+	drawMesh(MESH_CUBE);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// ------------------------------------------------------------
+	// LEFT HEADLIGHT
+
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, -0.85f, 0.85f, 2.50f);
+	mu.scale(gmu::MODEL, 0.20f, 0.15f, 0.10f);
+
+	setMeshMaterial(MESH_SPHERE, headlightMaterial);
+	drawMesh(MESH_SPHERE);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// ------------------------------------------------------------
+	// RIGHT HEADLIGHT
+
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, 0.85f, 0.85f, 2.50f);
+	mu.scale(gmu::MODEL, 0.20f, 0.15f, 0.10f);
+
+	setMeshMaterial(MESH_SPHERE, headlightMaterial);
+	drawMesh(MESH_SPHERE);
+
+	mu.popMatrix(gmu::MODEL);
+
+	// ------------------------------------------------------------
+	// EXHAUSTS 
+	
+	renderer.setTexUnit(2, 8);
+
+	// ------------------------------------------------------------
+	// LEFT EXHAUST
+
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, 0.90f, 0.55f, -2.65f);
+	mu.rotate(gmu::MODEL, 90.0f, 1.0f, 0.0f, 0.0f);  // Rotate it so its axis points towards the rear.
+	mu.scale(gmu::MODEL, 0.20f, 0.20f, 0.20f);
+
+	setMeshMaterial(MESH_CYLINDER, exhaustMaterial);
+	drawMesh(MESH_CYLINDER, 1);
+
+	mu.popMatrix(gmu::MODEL);
+
+	// ------------------------------------------------------------
+	// RIGHT EXHAUST
+
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, -0.90f, 0.55f, -2.65f);
+	mu.rotate(gmu::MODEL, 90.0f, 1.0f, 0.0f, 0.0f);
+	mu.scale(gmu::MODEL, 0.20f, 0.20f, 0.20f);
+
+	setMeshMaterial(MESH_CYLINDER, exhaustMaterial);
+	drawMesh(MESH_CYLINDER, 1);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// ------------------------------------------------------------
+// REAR SPOILER - LEFT SUPPORT
+
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, -0.55f, 1.32f, -2.3f);
+	mu.rotate(gmu::MODEL, -20.0f, 1.0f, 0.0f, 0.0f);
+	mu.scale(gmu::MODEL, 0.08f, 0.35f, 0.08f);
+
+	setMeshMaterial(MESH_CYLINDER, bodyMaterial);
+	drawMesh(MESH_CYLINDER);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// ------------------------------------------------------------
+	// REAR SPOILER - RIGHT SUPPORT
+
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, 0.55f, 1.32f, -2.3f);
+	mu.rotate(gmu::MODEL, -20.0f, 1.0f, 0.0f, 0.0f);
+	mu.scale(gmu::MODEL, 0.08f, 0.35f, 0.08f);
+
+	setMeshMaterial(MESH_CYLINDER, bodyMaterial);
+	drawMesh(MESH_CYLINDER);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// ------------------------------------------------------------
+	// REAR SPOILER - WING
+
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, 0.0f, 1.55f, -2.35f);
+	mu.scale(gmu::MODEL, 3.5f, 0.08f, 0.45f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+
+	setMeshMaterial(MESH_CUBE, bodyMaterial);
+	drawMesh(MESH_CUBE);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// ------------------------------------------------------------
+	// END OF CAR
+
+	mu.popMatrix(gmu::MODEL);
+}
+
 // ------------------------------------------------------------
 //
 // Render stufff
@@ -216,20 +688,33 @@ void renderSim(void)
 
 	FrameCount++;
 
-	// ============== Novo ==============
-
 	// update the environment
 	env.update(FPS / 1000.0f);
+
+    // CAR UPDATE / DELTA TIME
+	int currentTime = glutGet(GLUT_ELAPSED_TIME);
+
+	float dt = 0.0f;
+
+	if (lastCarUpdateTime != 0)
+	{
+		dt = (currentTime - lastCarUpdateTime) / 1000.0f;
+	}
+
+	lastCarUpdateTime = currentTime;
+
+
+	// Avoid huge jumps if the program freezes momentarily
+	if (dt > 0.05f)
+		dt = 0.05f;
+
+
+	updateCar(dt);
+
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	renderer.activateRenderMeshesShaderProg(); // use the required GLSL program to draw the meshes with illumination
-
-	// Associar os Texture Units aos Objects Texture
-	// stone.tga loaded in TU0; checker.tga loaded in TU1;  lightwood.tga loaded in TU2
-	// renderer.setTexUnit(0, 0);
-	// renderer.setTexUnit(1, 1);
-	// renderer.setTexUnit(2, 2);
 
 	// load identity matrices
 	mu.loadIdentity(gmu::VIEW);
@@ -254,66 +739,11 @@ void renderSim(void)
 	renderer.setSpotLightMode(spotlight_mode);
 	renderer.setSpotParam(coneDir, 0.93);
 
-	dataMesh data;
-
-	// ============== REMOVIDO (comentado) ==============
-	// Chão original do template - substituído pela mesa do Environment.
-	/*
-	mu.pushMatrix(gmu::MODEL);
-	mu.translate(gmu::MODEL, 0.0f, -1.15f, 0.0f);
-	mu.scale(gmu::MODEL, 30.0f, 0.1f, 30.0f);
-	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f); //centrar o cubo na origem
-
-	mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-	mu.computeNormalMatrix3x3();
-
-	data.meshID = 0;
-	data.texMode = 1; //modulate diffuse color with texel color
-	data.vm = mu.get(gmu::VIEW_MODEL),
-	data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-	data.normal = mu.getNormalMatrix();
-	renderer.renderMesh(data);
-	mu.popMatrix(gmu::MODEL);
-	*/
-	// =====================================================
-
 	// Desenha mesa / estrada / linha de meta / cheerios / manteigas / laranjas
 	env.render(renderer, mu);
 
-	// O Environment troca o bind das TU0/TU2 para as suas próprias texturas
-	// (mesa, estrada, linha de meta, laranjas); como qualquer objeto de
-	// demonstração desenhado a seguir também usa TU0/1/2, é preciso repor
-	// os bindings originais do template antes de os desenhar.
-	renderer.setTexUnit(0, 0);
-	renderer.setTexUnit(1, 1);
-	renderer.setTexUnit(2, 2);
-	// =========================================
-
-	// ============== REMOVIDO (comentado) ==============
-	// Draw the other objects (OBJETOS DE DEMONSTRAÇÃO DO TEMPLATE)
-	/*
-	int objId = 0; //id of the current object mesh - to be used as index of the array Mymeshes in the renderer object
-	for (int i = 0; i < 4; ++i) {
-		for (int j = 0; j < 4; ++j) {
-			mu.pushMatrix(gmu::MODEL);
-			mu.translate(gmu::MODEL, (float)i * 3.7f, 0.0f, (float)j * 3.7f);
-
-			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-			mu.computeNormalMatrix3x3();
-
-			data.meshID = objId;
-			data.texMode = i;   //0:no texturing; 1:modulate diffuse color with texel color; 2:diffuse color is replaced by texel color; 3: multitexturing
-			data.vm = mu.get(gmu::VIEW_MODEL),
-				data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-			data.normal = mu.getNormalMatrix();
-			renderer.renderMesh(data);
-
-			mu.popMatrix(gmu::MODEL);
-			objId = (objId + 1) % 6;
-		}
-	}
-	*/
-	// =====================================================
+	// Draw the car
+	drawCar();
 
 	// Render text (bitmap fonts) in screen coordinates. So use ortoghonal projection with viewport coordinates.
 	// Each glyph quad texture needs just one byte color channel: 0 in background and 1 for the actual character pixels. Use it for alpha blending
@@ -357,35 +787,55 @@ void processKeys(unsigned char key, int xx, int yy)
 	switch (key)
 	{
 
-	case 27:
-		glutLeaveMainLoop();
-		break;
+		case 27:
+			glutLeaveMainLoop();
+			break;
 
-	case 'c':
-		printf("Camera Spherical Coordinates (%f, %f, %f)\n", alpha, _beta, r);
-		break;
+		case 'w':
+		case 'W':
+			keyW = true;
+			break;
 
-	case 'l': // toggle spotlight mode
-		if (!spotlight_mode)
+		case 's':
+		case 'S':
+			keyS = true;
+			break;
+
+		case 'a':
+		case 'A':
+			keyA = true;
+			break;
+
+		case 'd':
+		case 'D':
+			keyD = true;
+			break;
+
+		case 'c': 
+			printf("Camera Spherical Coordinates (%f, %f, %f)\n", alpha, _beta, r);
+			break;
+
+		case 'l': // toggle spotlight mode
+			if (!spotlight_mode)
 		{
-			spotlight_mode = true;
-			printf("Point light disabled. Spot light enabled\n");
-		}
-		else
+				spotlight_mode = true;
+				printf("Point light disabled. Spot light enabled\n");
+			}
+			else
 		{
-			spotlight_mode = false;
-			printf("Spot light disabled. Point light enabled\n");
-		}
-		break;
+				spotlight_mode = false;
+				printf("Spot light disabled. Point light enabled\n");
+			}
+			break;
 
-	case 'r': // reset
-		alpha = 57.0f;
-		_beta = 18.0f; // Camera Spherical Coordinates
-		r = 45.0f;
-		camX = r * sin(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
-		camZ = r * cos(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
-		camY = r * sin(_beta * 3.14f / 180.0f);
-		break;
+		case 'r': // reset
+			alpha = 57.0f;
+			_beta = 18.0f; // Camera Spherical Coordinates
+			r = 45.0f;
+			camX = r * sin(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
+			camZ = r * cos(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
+			camY = r * sin(_beta * 3.14f / 180.0f);
+			break;
 
 	case 'm':
 		glEnable(GL_MULTISAMPLE);
@@ -416,12 +866,40 @@ void processKeys(unsigned char key, int xx, int yy)
 		perspProj = true;
 		trackingCamera = true;
 		cameraOrientation = 0.0f;
+		fixedCamera = false;
 		setCameraBehind();
 		updateProjection();
 		printf("Movable Camera - Perspective projection [%d]\n", perspProj);
 		break;
 	}
 }
+
+void processKeysUp(unsigned char key, int xx, int yy)
+{
+	switch (key) {
+
+	case 'w':
+	case 'W':
+		keyW = false;
+		break;
+
+	case 's':
+	case 'S':
+		keyS = false;
+		break;
+
+	case 'a':
+	case 'A':
+		keyA = false;
+		break;
+
+	case 'd':
+	case 'D':
+		keyD = false;
+		break;
+	}
+}
+
 
 // ------------------------------------------------------------
 //
@@ -536,10 +1014,12 @@ void buildScene()
 	renderer.TexObjArray.texture2D_Loader("assets/lightwood.tga"); // 2
 
 	// Minhas texturas (3, 4, 5, 6)
-	renderer.TexObjArray.texture2D_Loader("assets/table.jpg");		// 3
-	renderer.TexObjArray.texture2D_Loader("assets/road.jpg");		// 4
-	renderer.TexObjArray.texture2D_Loader("assets/finishline.jpg"); // 5
-	renderer.TexObjArray.texture2D_Loader("assets/orange.jpg");		// 6
+	renderer.TexObjArray.texture2D_Loader("assets/table.jpg");       // 3
+	renderer.TexObjArray.texture2D_Loader("assets/road.jpg");        // 4
+	renderer.TexObjArray.texture2D_Loader("assets/finishline.jpg");  // 5
+	renderer.TexObjArray.texture2D_Loader("assets/orange.jpg");      // 6
+	renderer.TexObjArray.texture2D_Loader("assets/tire.png");        // 7
+	renderer.TexObjArray.texture2D_Loader("assets/exhaust_metal.png"); // 8
 
 	// Scene geometry with triangle meshes
 
@@ -557,7 +1037,7 @@ void buildScene()
 	float shininess = 100.0f;
 	int texcount = 0;
 
-	// create geometry and VAO of the cube  -> fica em renderer.myMeshes[0]
+	// create geometry and VAO of the cube
 	amesh = createCube();
 	memcpy(amesh.mat.ambient, amb1, 4 * sizeof(float));
 	memcpy(amesh.mat.diffuse, diff1, 4 * sizeof(float));
@@ -567,7 +1047,7 @@ void buildScene()
 	amesh.mat.texCount = texcount;
 	renderer.myMeshes.push_back(amesh);
 
-	// create geometry and VAO of the pawn  -> fica em renderer.myMeshes[1]
+	// create geometry and VAO of the pawn
 	amesh = createPawn();
 	memcpy(amesh.mat.ambient, amb, 4 * sizeof(float));
 	memcpy(amesh.mat.diffuse, diff, 4 * sizeof(float));
@@ -577,7 +1057,7 @@ void buildScene()
 	amesh.mat.texCount = texcount;
 	renderer.myMeshes.push_back(amesh);
 
-	// create geometry and VAO of the sphere  -> fica em renderer.myMeshes[2]
+	// create geometry and VAO of the sphere
 	amesh = createSphere(1.0f, 20);
 	memcpy(amesh.mat.ambient, amb, 4 * sizeof(float));
 	memcpy(amesh.mat.diffuse, diff, 4 * sizeof(float));
@@ -587,7 +1067,7 @@ void buildScene()
 	amesh.mat.texCount = texcount;
 	renderer.myMeshes.push_back(amesh);
 
-	// create geometry and VAO of the cylinder  -> fica em renderer.myMeshes[3]
+	// create geometry and VAO of the cylinder
 	amesh = createCylinder(1.5f, 0.5f, 20);
 	memcpy(amesh.mat.ambient, amb, 4 * sizeof(float));
 	memcpy(amesh.mat.diffuse, diff, 4 * sizeof(float));
@@ -597,7 +1077,7 @@ void buildScene()
 	amesh.mat.texCount = texcount;
 	renderer.myMeshes.push_back(amesh);
 
-	// create geometry and VAO of the cone  -> fica em renderer.myMeshes[4]
+	// create geometry and VAO of the cone
 	amesh = createCone(2.5f, 1.2f, 20);
 	memcpy(amesh.mat.ambient, amb, 4 * sizeof(float));
 	memcpy(amesh.mat.diffuse, diff, 4 * sizeof(float));
@@ -607,7 +1087,7 @@ void buildScene()
 	amesh.mat.texCount = texcount;
 	renderer.myMeshes.push_back(amesh);
 
-	// create geometry and VAO of the torus  -> fica em renderer.myMeshes[5]
+	// create geometry and VAO of the torus
 	amesh = createTorus(0.5f, 1.5f, 20, 20);
 	memcpy(amesh.mat.ambient, amb, 4 * sizeof(float));
 	memcpy(amesh.mat.diffuse, diff, 4 * sizeof(float));
@@ -661,11 +1141,12 @@ int main(int argc, char **argv)
 	glutReshapeFunc(changeSize);
 
 	glutTimerFunc(0, timer, 0);
-	glutIdleFunc(renderSim); // Use it for maximum performance
-	// glutTimerFunc(0, refresh, 0);    //use it to to get 60 FPS whatever
+	//glutIdleFunc(renderSim);  // Use it for maximum performance
+	glutTimerFunc(0, refresh, 0);    //use it to to get 60 FPS whatever
 
 	//	Mouse and Keyboard Callbacks
 	glutKeyboardFunc(processKeys);
+	glutKeyboardUpFunc(processKeysUp);
 	glutMouseFunc(processMouseButtons);
 	glutMotionFunc(processMouseMotion);
 	glutMouseWheelFunc(mouseWheel);

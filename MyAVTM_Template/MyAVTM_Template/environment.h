@@ -69,6 +69,10 @@ public:
     const std::vector<Orange>& getOranges()       const { return oranges; }
     float getCheerioRadius()                      const { return cfg.cheerioOuterRadius; }
 
+    float getRoadSurfaceY() const {
+        return (cfg.tableHeight * 0.5f) + cfg.roadHeight;
+    }
+
 private:
     Config cfg;
 
