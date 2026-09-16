@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="MyAVTM_Template/MyAVTM_Template.vcxproj" Id="c9dd113d-826c-4d96-b578-5d209894bbb2" />
+</Solution>
