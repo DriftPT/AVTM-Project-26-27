@@ -43,6 +43,8 @@ public:
         float x = 0.0f, y = 0.0f, z = 0.0f;
         float vx = 0.0f, vz = 0.0f; // velocidade linear
 		float speed = 0.0f; // velocidade escalar
+		float baseSpeed = 0.0f; // velocidade base (dependendo do tipo)
+		float dirX = 0.0f, dirZ = 0.0f; //direção de movimento (normalizada)
         float radius = 1.0f;
         float rotationAngle = 0.0f; // ângulo de rotação enquanto rola
         bool active = true;
@@ -76,6 +78,7 @@ public:
 
 private:
     Config cfg;
+    float totalPlayTime = 0.0f;
 
     std::vector<RoadBlock> roadBlocks;
     std::vector<float> cheerioX, cheerioZ;

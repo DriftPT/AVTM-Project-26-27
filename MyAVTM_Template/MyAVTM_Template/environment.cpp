@@ -146,20 +146,19 @@ void Environment::resetOrange(Orange& orange) {
 
     // Atribuir tipo aleatório
     int rType = rand() % 3;
-    float baseSpeed;
     if (rType == 0) {
         orange.type = OrangeType::SLOW;
-        baseSpeed = 7.0f;
+        orange.baseSpeed = 7.0f;
         orange.radius = cfg.orangeDefaultRadius * 1.2f;
     }
     else if (rType == 1) {
         orange.type = OrangeType::NORMAL;
-        baseSpeed = 9.0f;
+        orange.baseSpeed = 9.0f;
         orange.radius = cfg.orangeDefaultRadius;
     }
     else {
         orange.type = OrangeType::FAST;
-        baseSpeed = 12.0f;
+        orange.baseSpeed = 12.0f;
         orange.radius = cfg.orangeDefaultRadius * 0.8f;
     }
 
@@ -172,7 +171,7 @@ void Environment::resetOrange(Orange& orange) {
     if (side == 0) { // Topo
         orange.x = (((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f) * halfTableX;
         orange.z = -halfTableZ;
-        dirX = (((float)rand() / (float)RAND_MAX) - 0.5f); // desvio lateral aleatório
+        dirX = (((float)rand() / (float)RAND_MAX) - 0.5f); // desvio aleatório
         dirZ = 1.0f;
     }
     else if (side == 1) { // Baixo
@@ -199,9 +198,11 @@ void Environment::resetOrange(Orange& orange) {
     dirX /= dirLen;
     dirZ /= dirLen;
 
-    orange.vx = dirX * baseSpeed;
-    orange.vz = dirZ * baseSpeed;
-    orange.speed = baseSpeed;
+    orange.vx = dirX * orange.baseSpeed;
+    orange.vz = dirZ * orange.baseSpeed;
+    orange.speed = orange.baseSpeed;
+    orange.dirX = dirX;
+    orange.dirZ = dirZ;
     orange.active = true;
 }
 
@@ -210,8 +211,18 @@ void Environment::update(float deltaTime) {
     float limitX = cfg.tableWidth * 0.5f;
     float limitZ = cfg.tableDepth * 0.5f;
 
+    totalPlayTime += deltaTime;
+
+	// Aumentar a velocidade das laranjas com o tempo com um maximo de 2.5x
+    float speedMultiplier = 1.0f + totalPlayTime * 0.02f;
+    if (speedMultiplier > 2.5f) speedMultiplier = 2.5f;
     for (auto& orange : oranges) {
         if (!orange.active) continue;
+
+		// Atualizar a velocidade com base no multiplicador de tempo
+        orange.speed = orange.baseSpeed * speedMultiplier;
+        orange.vx = orange.dirX * orange.speed;
+        orange.vz = orange.dirZ * orange.speed;
 
         // Movimento retilíneo
         orange.x += orange.vx * deltaTime;
@@ -224,8 +235,6 @@ void Environment::update(float deltaTime) {
         if (orange.rotationAngle > 360.0f) {
             orange.rotationAngle -= 360.0f;
         }
-
-        // TODO: falta implementar Acelaração gradual com tempo
 
         // Respawn ao sair da mesa
         if (fabs(orange.x) > limitX || fabs(orange.z) > limitZ) {
