@@ -149,17 +149,17 @@ void Environment::resetOrange(Orange& orange) {
     float baseSpeed;
     if (rType == 0) {
         orange.type = OrangeType::SLOW;
-        baseSpeed = 1.0f;
+        baseSpeed = 7.0f;
         orange.radius = cfg.orangeDefaultRadius * 1.2f;
     }
     else if (rType == 1) {
         orange.type = OrangeType::NORMAL;
-        baseSpeed = 2.0f;
+        baseSpeed = 9.0f;
         orange.radius = cfg.orangeDefaultRadius;
     }
     else {
         orange.type = OrangeType::FAST;
-        baseSpeed = 4.0f;
+        baseSpeed = 12.0f;
         orange.radius = cfg.orangeDefaultRadius * 0.8f;
     }
 
@@ -167,30 +167,41 @@ void Environment::resetOrange(Orange& orange) {
 	float halfTableX = cfg.tableWidth * 0.45f; // 0.45f para não sair da mesa
     float halfTableZ = cfg.tableDepth * 0.45f;
 
+    float dirX = 0.0f, dirZ = 0.0f; // direção (ainda não normalizada)
+
     if (side == 0) { // Topo
-		orange.x = (((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f) * halfTableX; // posição aleatória no eixo X
+        orange.x = (((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f) * halfTableX;
         orange.z = -halfTableZ;
-		orange.vx = (((float)rand() / (float)RAND_MAX) - 0.5f) * baseSpeed; // velocidade aleatória no eixo X para não ir sempre na mesma direção
-        orange.vz = baseSpeed;
+        dirX = (((float)rand() / (float)RAND_MAX) - 0.5f); // desvio lateral aleatório
+        dirZ = 1.0f;
     }
     else if (side == 1) { // Baixo
         orange.x = (((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f) * halfTableX;
         orange.z = halfTableZ;
-        orange.vx = (((float)rand() / (float)RAND_MAX) - 0.5f) * baseSpeed;
-        orange.vz = -baseSpeed;
+        dirX = (((float)rand() / (float)RAND_MAX) - 0.5f);
+        dirZ = -1.0f;
     }
     else if (side == 2) { // Esquerda
         orange.x = -halfTableX;
         orange.z = (((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f) * halfTableZ;
-        orange.vx = baseSpeed;
-        orange.vz = (((float)rand() / (float)RAND_MAX) - 0.5f) * baseSpeed;
+        dirX = 1.0f;
+        dirZ = (((float)rand() / (float)RAND_MAX) - 0.5f);
     }
     else { // Direita
         orange.x = halfTableX;
         orange.z = (((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f) * halfTableZ;
-        orange.vx = -baseSpeed;
-        orange.vz = (((float)rand() / (float)RAND_MAX) - 0.5f) * baseSpeed;
+        dirX = -1.0f;
+        dirZ = (((float)rand() / (float)RAND_MAX) - 0.5f);
     }
+
+	// Normalizar a direção para que a velocidade seja consistente
+    float dirLen = sqrtf(dirX * dirX + dirZ * dirZ);
+    dirX /= dirLen;
+    dirZ /= dirLen;
+
+    orange.vx = dirX * baseSpeed;
+    orange.vz = dirZ * baseSpeed;
+    orange.speed = baseSpeed;
     orange.active = true;
 }
 
@@ -206,7 +217,15 @@ void Environment::update(float deltaTime) {
         orange.x += orange.vx * deltaTime;
         orange.z += orange.vz * deltaTime;
 
-        // TODO: falta implementar Acelaração gradual com tempo E Rotação
+		// Atualizar o ângulo de rotação com base na velocidade linear e no raio da laranja
+        float angularSpeedRad = orange.speed / orange.radius;                   // ω = v / r
+        float angularSpeedDeg = angularSpeedRad * (180.0f / 3.14159f);
+        orange.rotationAngle += angularSpeedDeg * deltaTime;
+        if (orange.rotationAngle > 360.0f) {
+            orange.rotationAngle -= 360.0f;
+        }
+
+        // TODO: falta implementar Acelaração gradual com tempo
 
         // Respawn ao sair da mesa
         if (fabs(orange.x) > limitX || fabs(orange.z) > limitZ) {
@@ -441,7 +460,11 @@ void Environment::drawOranges(Renderer& renderer, gmu& mu) {
 
         mu.pushMatrix(gmu::MODEL);
         mu.translate(gmu::MODEL, orange.x, orange.y, orange.z);
-        // TODO fazer rotação
+
+		// Calcular o eixo de rotação para a laranja
+		float axisX = orange.vz / orange.speed; // eixo perpendicular à direção do movimento já normalizado
+        float axisZ = -orange.vx / orange.speed;
+        mu.rotate(gmu::MODEL, orange.rotationAngle, axisX, 0.0f, axisZ);
 
         mu.scale(gmu::MODEL, orange.radius, orange.radius, orange.radius);
         mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);

@@ -42,6 +42,7 @@ public:
         OrangeType type = OrangeType::NORMAL;
         float x = 0.0f, y = 0.0f, z = 0.0f;
         float vx = 0.0f, vz = 0.0f; // velocidade linear
+		float speed = 0.0f; // velocidade escalar
         float radius = 1.0f;
         float rotationAngle = 0.0f; // ângulo de rotação enquanto rola
         bool active = true;

@@ -253,7 +253,7 @@ const float MAX_FORWARD_SPEED = 7.0f;
 const float MAX_BACKWARD_SPEED = -3.5f;
 
 // Used to calculate the time between frames
-int lastCarUpdateTime = 0;
+int lastUpdateTime = 0;
 
 
 // ------------------------------------------------------------
@@ -716,30 +716,26 @@ void drawCar()
 
 void renderSim(void)
 {
-
 	FrameCount++;
-
-	// update the environment
-	env.update(FPS / 1000.0f);
 
     // CAR UPDATE / DELTA TIME
 	int currentTime = glutGet(GLUT_ELAPSED_TIME);
 
 	float dt = 0.0f;
-
-	if (lastCarUpdateTime != 0)
+	if (lastUpdateTime != 0)
 	{
-		dt = (currentTime - lastCarUpdateTime) / 1000.0f;
+		dt = (currentTime - lastUpdateTime) / 1000.0f;
 	}
 
-	lastCarUpdateTime = currentTime;
+	lastUpdateTime = currentTime;
 
 
 	// Avoid huge jumps if the program freezes momentarily
 	if (dt > 0.05f)
 		dt = 0.05f;
 
-
+	// update the environment and car
+	env.update(dt);
 	updateCar(dt);
 
 
