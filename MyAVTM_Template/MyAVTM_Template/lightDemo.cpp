@@ -247,6 +247,8 @@ float carDirection[3] = { 0.0f, 0.0f, 1.0f };
 const float ACCELERATION = 3.0f;
 const float DECELERATION = 2.0f;
 
+const float TURN_SPEED = 75.0f;   // degrees per second
+
 const float MAX_FORWARD_SPEED = 7.0f;
 const float MAX_BACKWARD_SPEED = -3.5f;
 
@@ -425,7 +427,36 @@ void updateCar(float dt)
 	if (carVelocity < MAX_BACKWARD_SPEED)
 		carVelocity = MAX_BACKWARD_SPEED;
 
+	// ------------------------------------------------------------
+	// STEERING
 
+	// Only turn if the car is moving
+	if (fabs(carVelocity) > 0.01f)
+	{
+		// When reversing, steering direction is reversed
+		float directionSign = 1.0f;
+
+		if (carVelocity < 0.0f)
+			directionSign = -1.0f;
+
+
+		if (keyA)
+			carAngle += TURN_SPEED * directionSign * dt;
+
+		if (keyD)
+			carAngle -= TURN_SPEED * directionSign * dt;
+	}
+
+	// ------------------------------------------------------------
+	// CAR DIRECTION
+
+	float angleRad = carAngle * 3.14159265f / 180.0f;
+
+	carDirection[0] = sin(angleRad);
+	carDirection[1] = 0.0f;
+	carDirection[2] = cos(angleRad);
+
+	
 	// ------------------------------------------------------------
 	// UPDATE POSITION
 
