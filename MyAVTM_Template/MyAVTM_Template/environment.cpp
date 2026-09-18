@@ -254,7 +254,8 @@ void Environment::render(Renderer& renderer, gmu& mu) {
 }
 
 void Environment::drawTable(Renderer& renderer, gmu& mu) {
-    renderer.setTexUnit(0, 3);
+	renderer.setTexUnit(1, 2); // TU1 = texmap1 -> lightwood.tga
+	renderer.setTexUnit(2, 3); // TU2 = texmap2 -> table.jpg
 
     // Material da mesa aplicado ao Cubo (Mesh 0)
     float amb[] = { 0.25f, 0.25f, 0.25f, 1.0f };
@@ -267,7 +268,7 @@ void Environment::drawTable(Renderer& renderer, gmu& mu) {
 
     dataMesh data;
     data.meshID = 0;   // Cubo
-    data.texMode = 2;  // diffuse substituída pelo texel (que usa texmap/TU0)
+	data.texMode = 3;  // multitexturing (usa texmap/TU0 e texmap2/TU2)
 
     mu.pushMatrix(gmu::MODEL);
     mu.scale(gmu::MODEL, cfg.tableWidth, cfg.tableHeight, cfg.tableDepth);
