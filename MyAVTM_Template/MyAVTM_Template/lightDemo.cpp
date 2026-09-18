@@ -257,6 +257,30 @@ int lastUpdateTime = 0;
 
 
 // ------------------------------------------------------------
+// COLISIONS
+// ------------------------------------------------------------
+// Axis-Aligned Bounding Box structure
+struct AABB
+{
+	float minX, maxX;
+	float minY, maxY;
+	float minZ, maxZ;
+};
+
+AABB carAABB;
+
+// Car bounding box dimensions
+const float CAR_MIN_X = -1.815f;
+const float CAR_MAX_X = 1.815f;
+
+const float CAR_MIN_Y = 0.0f;
+const float CAR_MAX_Y = 1.85f;
+
+const float CAR_MIN_Z = -3.15f;
+const float CAR_MAX_Z = 2.85f;
+
+
+// ------------------------------------------------------------
 // MATERIALS
 
 struct CarMaterial
@@ -363,6 +387,51 @@ void drawMesh(int meshID, int texMode = 0)
 }
 
 
+void updateCarAABB()
+{
+	float angleRad = carAngle * 3.14f / 180.0f;
+
+	float c = cos(angleRad);
+	float s = sin(angleRad);
+
+	// Four corners of the local bounding box in the XZ plane
+	float localX[4] = { CAR_MIN_X, CAR_MAX_X, CAR_MAX_X, CAR_MIN_X};
+
+	float localZ[4] = { CAR_MIN_Z, CAR_MIN_Z, CAR_MAX_Z, CAR_MAX_Z };
+
+	// Rotate first corner and use it to initialize min/max
+	float rotatedX = localX[0] * c + localZ[0] * s;
+	float rotatedZ = -localX[0] * s + localZ[0] * c;
+
+	carAABB.minX = carAABB.maxX = carX + rotatedX;
+	carAABB.minZ = carAABB.maxZ = carZ + rotatedZ;
+
+	// Rotate the remaining corners
+	for (int i = 1; i < 4; i++)
+	{
+		rotatedX = localX[i] * c + localZ[i] * s;
+		rotatedZ = -localX[i] * s + localZ[i] * c;
+
+		float worldX = carX + rotatedX;
+		float worldZ = carZ + rotatedZ;
+
+		if (worldX < carAABB.minX)
+			carAABB.minX = worldX;
+
+		if (worldX > carAABB.maxX)
+			carAABB.maxX = worldX;
+
+		if (worldZ < carAABB.minZ)
+			carAABB.minZ = worldZ;
+
+		if (worldZ > carAABB.maxZ)
+			carAABB.maxZ = worldZ;
+	}
+
+	carAABB.minY = carBaseY + CAR_MIN_Y;
+	carAABB.maxY = carBaseY + CAR_MAX_Y;
+}
+
 void updateCar(float dt)
 {
 	// ------------------------------------------------------------
@@ -461,7 +530,11 @@ void updateCar(float dt)
 
 	carX += carDirection[0] * carVelocity * dt;
 	carZ += carDirection[2] * carVelocity * dt;
+
+	updateCarAABB();
 }
+
+
 
 void drawWheel(float x, float y, float z)
 {
@@ -751,7 +824,7 @@ void drawCar()
 	// Left Exhaust
 	mu.pushMatrix(gmu::MODEL);
 
-	mu.translate(gmu::MODEL, 0.90f, 0.50f, -2.9f);
+	mu.translate(gmu::MODEL, 0.90f, 0.50f, -3.0f);
 	mu.rotate(gmu::MODEL, 90.0f, 1.0f, 0.0f, 0.0f);  // Rotate it so its axis points towards the rear.
 	mu.scale(gmu::MODEL, 0.20f, 0.20f, 0.20f);
 
@@ -763,7 +836,7 @@ void drawCar()
 	// Right Exhaust
 	mu.pushMatrix(gmu::MODEL);
 
-	mu.translate(gmu::MODEL, -0.90f, 0.50f, -2.9f);
+	mu.translate(gmu::MODEL, -0.90f, 0.50f, -3.0f);
 	mu.rotate(gmu::MODEL, 90.0f, 1.0f, 0.0f, 0.0f);
 	mu.scale(gmu::MODEL, 0.20f, 0.20f, 0.20f);
 
