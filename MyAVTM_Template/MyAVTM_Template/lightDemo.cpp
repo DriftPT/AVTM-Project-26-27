@@ -249,8 +249,8 @@ const float DECELERATION = 2.0f;
 
 const float TURN_SPEED = 75.0f;   // degrees per second
 
-const float MAX_FORWARD_SPEED = 7.0f;
-const float MAX_BACKWARD_SPEED = -3.5f;
+const float MAX_FORWARD_SPEED = 15.0f;
+const float MAX_BACKWARD_SPEED = -10.0f;
 
 // Used to calculate the time between frames
 int lastUpdateTime = 0;
@@ -267,21 +267,12 @@ struct CarMaterial
 	float shininess;
 };
 
-// Car body - vivid light sports blue
+// Car body - blue
 CarMaterial bodyMaterial = {
-	{ 0.06f, 0.15f, 0.25f, 1.0f },
-	{ 0.22f, 0.62f, 0.95f, 1.0f },
-	{ 0.55f, 0.55f, 0.60f, 1.0f },
-	45.0f
-};
-
-
-// Bumper - dark plastic
-CarMaterial bumperMaterial = {
-	{ 0.07f, 0.07f, 0.08f, 1.0f }, 
-	{ 0.28f, 0.30f, 0.33f, 1.0f },  
-	{ 0.22f, 0.22f, 0.24f, 1.0f },  
-	18.0f
+	{ 0.02f, 0.05f, 0.15f, 1.0f },
+	{ 0.02f, 0.30f, 0.80f, 1.0f },
+	{ 0.60f, 0.70f, 0.90f, 1.0f },
+	70.0f
 };
 
 
@@ -294,12 +285,20 @@ CarMaterial wheelMaterial = {
 };
 
 
-// Headlights - warm white
+// Headlights - white/blue
 CarMaterial headlightMaterial = {
-	{ 0.15f, 0.15f, 0.12f, 1.0f },
-	{ 1.00f, 0.95f, 0.78f, 1.0f },
-	{ 0.90f, 0.90f, 0.85f, 1.0f },
-	70.0f
+	{ 0.12f, 0.14f, 0.18f, 1.0f },
+	{ 0.75f, 0.85f, 1.00f, 1.0f },
+	{ 1.00f, 1.00f, 1.00f, 1.0f },
+	100.0f
+};
+
+// RearLights - red
+CarMaterial rearLightMaterial = {
+	{ 0.20f, 0.00f, 0.00f, 1.0f },
+	{ 0.90f, 0.05f, 0.05f, 1.0f },
+	{ 0.80f, 0.30f, 0.30f, 1.0f },
+	50.0f
 };
 
 
@@ -312,12 +311,12 @@ CarMaterial exhaustMaterial = {
 };
 
 
-// Windshield - light blue / glass-like
-CarMaterial glassMaterial = {
-	{ 0.12f, 0.14f, 0.16f, 1.0f },   // ambient
-	{ 0.82f, 0.90f, 0.98f, 1.0f },   // diffuse
-	{ 1.00f, 1.00f, 1.00f, 1.0f },   // specular
-	100.0f                           // shininess
+// Windshield and windows
+CarMaterial darkGlassMaterial = {
+	{ 0.02f, 0.04f, 0.06f, 1.0f },
+	{ 0.08f, 0.16f, 0.22f, 1.0f },
+	{ 0.70f, 0.80f, 0.90f, 1.0f },
+	90.0f
 };
 
 
@@ -464,13 +463,103 @@ void updateCar(float dt)
 	carZ += carDirection[2] * carVelocity * dt;
 }
 
+void drawWheel(float x, float y, float z)
+{
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, x, y, z);
+	mu.rotate(gmu::MODEL, 90.0f, 0.0f, 0.0f, 1.0f);
+
+
+	// Tire
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.scale(gmu::MODEL, 0.33f, 0.33f, 0.33f);
+	renderer.setTexUnit(0, 7);
+	setMeshMaterial(MESH_TORUS, wheelMaterial);
+	drawMesh(MESH_TORUS, 2);
+
+	mu.popMatrix(gmu::MODEL);
+
+	// Rim
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.scale(gmu::MODEL, 0.4f, 0.12f, 0.4f);
+	setMeshMaterial(MESH_CYLINDER, wheelMaterial);
+	drawMesh(MESH_CYLINDER);
+
+	mu.popMatrix(gmu::MODEL);
+
+	mu.popMatrix(gmu::MODEL);
+}
+
+void drawSideWindow(float x, float z)
+{
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, x, 1.5f, z);
+	mu.scale(gmu::MODEL, 0.02f, 0.4f, 0.9f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+
+	setMeshMaterial(MESH_CUBE, darkGlassMaterial);
+	drawMesh(MESH_CUBE);
+
+	mu.popMatrix(gmu::MODEL);
+}
+
+void drawMirror(float side)
+{
+	float angle = side * 20.0f;
+
+
+	// Cylindrical support
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, side * 1.2f, 1.3f, 0.75f);
+	mu.rotate(gmu::MODEL, -angle, 0.0f, 1.0f, 0.0f);
+	mu.rotate(gmu::MODEL, 90.0f, 0.0f, 0.0f, 1.0f);
+	mu.scale(gmu::MODEL, 0.05f, 0.1f, 0.05f);
+
+	setMeshMaterial(MESH_CYLINDER, bodyMaterial);
+	drawMesh(MESH_CYLINDER);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// Body
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, side * 1.4f, 1.35f, 0.73f);
+	mu.rotate(gmu::MODEL, angle, 0.0f, 1.0f, 0.0f);
+	mu.scale(gmu::MODEL, 0.3f, 0.15f, 0.05f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+
+	setMeshMaterial(MESH_CUBE, bodyMaterial);
+	drawMesh(MESH_CUBE);
+
+	mu.popMatrix(gmu::MODEL);
+
+	// Miror
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, side * 1.4f, 1.35f, 0.72f);
+	mu.rotate(gmu::MODEL, angle, 0.0f, 1.0f, 0.0f);
+	mu.scale(gmu::MODEL, 0.2f, 0.1f, 0.05f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+
+	setMeshMaterial(MESH_CUBE, darkGlassMaterial);
+	drawMesh(MESH_CUBE);
+
+	mu.popMatrix(gmu::MODEL);
+}
+
+
 void drawCar()
 {
 	// ------------------------------------------------------------
 	// CAR TRANSFORMATION
 	//
 	// Everything drawn between this push/pop belongs to the car.
-	// Later carX, carZ and carAngle will move the whole car.
 
 	mu.pushMatrix(gmu::MODEL);
 
@@ -483,8 +572,8 @@ void drawCar()
 
 	mu.pushMatrix(gmu::MODEL);
 
-	mu.translate(gmu::MODEL, 0.0f, 0.75f, 0.0f);
-	mu.scale(gmu::MODEL, 3.0f, 0.6f, 5.0f);
+	mu.translate(gmu::MODEL, 0.0f, 0.8f, 0.0f);
+	mu.scale(gmu::MODEL, 3.2f, 0.7f, 5.4f);
 
 	// Cube is originally defined from 0 to 1,
 	// so centre it around its local origin.
@@ -502,8 +591,8 @@ void drawCar()
 	mu.pushMatrix(gmu::MODEL);
 
 	// Slightly towards the rear of the car
-	mu.translate(gmu::MODEL, 0.0f, 1.5f, -0.35f);
-	mu.scale(gmu::MODEL, 2.2f, 0.9f, 2.3f);
+	mu.translate(gmu::MODEL, 0.0f, 1.5f, -0.4f);
+	mu.scale(gmu::MODEL, 2.4f, 0.7f, 2.4f);
 	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
 
 	setMeshMaterial(MESH_CUBE, bodyMaterial);
@@ -512,86 +601,129 @@ void drawCar()
 	mu.popMatrix(gmu::MODEL);
 
 	// ------------------------------------------------------------
-	// FRONT WINDSHIELD
+	// HOOD RAISED
 
 	mu.pushMatrix(gmu::MODEL);
 
-	mu.translate(gmu::MODEL, 0.0f, 1.50f, 0.81f);
-	mu.scale(gmu::MODEL, 1.70f, 0.60f, 0.05f);
+	mu.translate(gmu::MODEL, 0.0f, 1.2f, 1.7f);
+	mu.scale(gmu::MODEL, 1.8f, 0.1f, 1.4f);
 	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
 
-	setMeshMaterial(MESH_CUBE, glassMaterial);
+	setMeshMaterial(MESH_CUBE, bodyMaterial);
 	drawMesh(MESH_CUBE);
 
 	mu.popMatrix(gmu::MODEL);
 
 
 	// ------------------------------------------------------------
-	// WHEELS
-	renderer.setTexUnit(0, 7);
+	// FRONT WINDSHIELD
 
-	// Front left
 	mu.pushMatrix(gmu::MODEL);
 
-	mu.translate(gmu::MODEL, -1.55f, 0.45f, 1.65f);
-	mu.rotate(gmu::MODEL, 90.0f, 0.0f, 0.0f, 1.0f);
-	mu.scale(gmu::MODEL, 0.30f, 0.30f, 0.30f);
+	mu.translate(gmu::MODEL, 0.0f, 1.5f, 0.81f);
+	mu.scale(gmu::MODEL, 1.9f, 0.5f, 0.02f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
 
-	setMeshMaterial(MESH_TORUS, wheelMaterial);
-	drawMesh(MESH_TORUS, 2);
-
-	mu.popMatrix(gmu::MODEL);
-
-
-	// Front right
-	mu.pushMatrix(gmu::MODEL);
-
-	mu.translate(gmu::MODEL, 1.55f, 0.45f, 1.65f);
-	mu.rotate(gmu::MODEL, 90.0f, 0.0f, 0.0f, 1.0f);
-	mu.scale(gmu::MODEL, 0.30f, 0.30f, 0.30f);
-
-	setMeshMaterial(MESH_TORUS, wheelMaterial);
-	drawMesh(MESH_TORUS, 2);
-
-	mu.popMatrix(gmu::MODEL);
-
-
-	// Rear left
-	mu.pushMatrix(gmu::MODEL);
-
-	mu.translate(gmu::MODEL, -1.55f, 0.45f, -1.65f);
-	mu.rotate(gmu::MODEL, 90.0f, 0.0f, 0.0f, 1.0f);
-	mu.scale(gmu::MODEL, 0.30f, 0.30f, 0.30f);
-
-	setMeshMaterial(MESH_TORUS, wheelMaterial);
-	drawMesh(MESH_TORUS, 2);
-
-	mu.popMatrix(gmu::MODEL);
-
-
-	// Rear right
-	mu.pushMatrix(gmu::MODEL);
-
-	mu.translate(gmu::MODEL, 1.55f, 0.45f, -1.65f);
-	mu.rotate(gmu::MODEL, 90.0f, 0.0f, 0.0f, 1.0f);
-	mu.scale(gmu::MODEL, 0.30f, 0.30f, 0.30f);
-
-	setMeshMaterial(MESH_TORUS, wheelMaterial);
-	drawMesh(MESH_TORUS, 2);
+	setMeshMaterial(MESH_CUBE, darkGlassMaterial);
+	drawMesh(MESH_CUBE);
 
 	mu.popMatrix(gmu::MODEL);
 
 
 	// ------------------------------------------------------------
-	// FRONT BUMPER
+	// REAR WINDOW
 
 	mu.pushMatrix(gmu::MODEL);
 
-	mu.translate(gmu::MODEL, 0.0f, 0.55f, 2.55f);
-	mu.scale(gmu::MODEL, 3.2f, 0.25f, 0.20f);
+	mu.translate(gmu::MODEL, 0.0f, 1.5f, -1.61f);
+	mu.scale(gmu::MODEL, 1.7f, 0.4f, 0.02f);
 	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
 
-	setMeshMaterial(MESH_CUBE, bumperMaterial);
+	setMeshMaterial(MESH_CUBE, darkGlassMaterial);
+	drawMesh(MESH_CUBE);
+
+	mu.popMatrix(gmu::MODEL);
+
+	// ------------------------------------------------------------
+	// SIDE WINDOWS
+
+	// right windows
+	drawSideWindow(-1.21f, 0.2f);
+	drawSideWindow(-1.21f, -0.9f);
+
+	// left windows
+	drawSideWindow(1.21f, 0.2f);
+	drawSideWindow(1.21f, -0.9f);
+
+
+	// ------------------------------------------------------------
+	// MIRRORS
+
+	drawMirror(-1.0f);  // Right mirror
+	drawMirror(1.0f);   // Left mirror
+
+
+	// ------------------------------------------------------------
+	// WHEELS
+
+	drawWheel(-1.65f, 0.5f, 1.9f);   // Front right
+	drawWheel(1.65f, 0.5f, 1.9f);    // Front left
+
+	drawWheel(-1.65f, 0.5f, -1.9f);  // Rear right
+	drawWheel(1.65f, 0.5f, -1.9f);   // Rear left
+
+	// ------------------------------------------------------------
+	// BUMPER
+
+	// upper bumper
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, 0.0f, 0.50f, 0.0f);
+	mu.scale(gmu::MODEL, 3.3f, 0.2f, 5.7f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+
+	setMeshMaterial(MESH_CUBE, bodyMaterial);
+	drawMesh(MESH_CUBE);
+
+	mu.popMatrix(gmu::MODEL);
+
+	// lower front bumper
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, 0.0f, 0.40f, 2.61f);
+	mu.scale(gmu::MODEL, 3.31f, 0.1f, 0.5f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+
+	setMeshMaterial(MESH_CUBE, darkGlassMaterial);
+	drawMesh(MESH_CUBE);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// ------------------------------------------------------------
+	// FRONT LICENSE PLATE
+
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, 0.0f, 0.75f, 2.70f);
+	mu.scale(gmu::MODEL, 0.8f, 0.25f, 0.02f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+	renderer.setTexUnit(0, 9);
+	drawMesh(MESH_CUBE, 2);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// ------------------------------------------------------------
+	// RIGHT HEADLIGHT
+
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, -1.0f, 1.0f, 2.71f);
+	mu.scale(gmu::MODEL, 0.8f, 0.2f, 0.1f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+
+	setMeshMaterial(MESH_CUBE, headlightMaterial);
 	drawMesh(MESH_CUBE);
 
 	mu.popMatrix(gmu::MODEL);
@@ -602,25 +734,12 @@ void drawCar()
 
 	mu.pushMatrix(gmu::MODEL);
 
-	mu.translate(gmu::MODEL, -0.85f, 0.85f, 2.50f);
-	mu.scale(gmu::MODEL, 0.20f, 0.15f, 0.10f);
+	mu.translate(gmu::MODEL, 1.0f, 1.0f, 2.71f);
+	mu.scale(gmu::MODEL, 0.8f, 0.2f, 0.1f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
 
-	setMeshMaterial(MESH_SPHERE, headlightMaterial);
-	drawMesh(MESH_SPHERE);
-
-	mu.popMatrix(gmu::MODEL);
-
-
-	// ------------------------------------------------------------
-	// RIGHT HEADLIGHT
-
-	mu.pushMatrix(gmu::MODEL);
-
-	mu.translate(gmu::MODEL, 0.85f, 0.85f, 2.50f);
-	mu.scale(gmu::MODEL, 0.20f, 0.15f, 0.10f);
-
-	setMeshMaterial(MESH_SPHERE, headlightMaterial);
-	drawMesh(MESH_SPHERE);
+	setMeshMaterial(MESH_CUBE, headlightMaterial);
+	drawMesh(MESH_CUBE);
 
 	mu.popMatrix(gmu::MODEL);
 
@@ -629,12 +748,10 @@ void drawCar()
 	
 	renderer.setTexUnit(2, 8);
 
-	// ------------------------------------------------------------
-	// LEFT EXHAUST
-
+	// Left Exhaust
 	mu.pushMatrix(gmu::MODEL);
 
-	mu.translate(gmu::MODEL, 0.90f, 0.55f, -2.65f);
+	mu.translate(gmu::MODEL, 0.90f, 0.50f, -2.9f);
 	mu.rotate(gmu::MODEL, 90.0f, 1.0f, 0.0f, 0.0f);  // Rotate it so its axis points towards the rear.
 	mu.scale(gmu::MODEL, 0.20f, 0.20f, 0.20f);
 
@@ -643,12 +760,10 @@ void drawCar()
 
 	mu.popMatrix(gmu::MODEL);
 
-	// ------------------------------------------------------------
-	// RIGHT EXHAUST
-
+	// Right Exhaust
 	mu.pushMatrix(gmu::MODEL);
 
-	mu.translate(gmu::MODEL, -0.90f, 0.55f, -2.65f);
+	mu.translate(gmu::MODEL, -0.90f, 0.50f, -2.9f);
 	mu.rotate(gmu::MODEL, 90.0f, 1.0f, 0.0f, 0.0f);
 	mu.scale(gmu::MODEL, 0.20f, 0.20f, 0.20f);
 
@@ -659,11 +774,70 @@ void drawCar()
 
 
 	// ------------------------------------------------------------
-// REAR SPOILER - LEFT SUPPORT
+	// REAR LIGHTS
+	
+	// Right outer light
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, -1.3f, 0.9f, -2.7f);
+	mu.scale(gmu::MODEL, 0.15f, 0.15f, 0.1f);;
+	setMeshMaterial(MESH_SPHERE, rearLightMaterial);
+	drawMesh(MESH_SPHERE);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// Right inner light
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, -1.0f, 0.85f, -2.7f);
+	mu.scale(gmu::MODEL, 0.1f, 0.1f, 0.1f);
+	setMeshMaterial(MESH_SPHERE, rearLightMaterial);
+	drawMesh(MESH_SPHERE);
+
+	mu.popMatrix(gmu::MODEL);
+
+	// Left outer light
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, 1.3f, 0.9f, -2.7f);
+	mu.scale(gmu::MODEL, 0.15f, 0.15f, 0.1f);;
+	setMeshMaterial(MESH_SPHERE, rearLightMaterial);
+	drawMesh(MESH_SPHERE);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// Left inner light
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, 1.0f, 0.85f, -2.7f);
+	mu.scale(gmu::MODEL, 0.1f, 0.1f, 0.1f);
+	setMeshMaterial(MESH_SPHERE, rearLightMaterial);
+	drawMesh(MESH_SPHERE);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// ------------------------------------------------------------
+	// REAR LICENSE PLATE
 
 	mu.pushMatrix(gmu::MODEL);
 
-	mu.translate(gmu::MODEL, -0.55f, 1.32f, -2.3f);
+	mu.translate(gmu::MODEL, 0.0f, 0.8f, -2.70f);
+	mu.scale(gmu::MODEL, 0.85f, 0.30f, 0.01f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+	renderer.setTexUnit(0, 9);
+	drawMesh(MESH_CUBE, 2);
+
+	mu.popMatrix(gmu::MODEL);
+
+	// ------------------------------------------------------------
+	// REAR SPOILER - RIGHT SUPPORT
+
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, -1.15f, 1.32f, -2.5f);
 	mu.rotate(gmu::MODEL, -20.0f, 1.0f, 0.0f, 0.0f);
 	mu.scale(gmu::MODEL, 0.08f, 0.35f, 0.08f);
 
@@ -674,11 +848,11 @@ void drawCar()
 
 
 	// ------------------------------------------------------------
-	// REAR SPOILER - RIGHT SUPPORT
+	// REAR SPOILER - LEFT SUPPORT
 
 	mu.pushMatrix(gmu::MODEL);
 
-	mu.translate(gmu::MODEL, 0.55f, 1.32f, -2.3f);
+	mu.translate(gmu::MODEL, 1.15f, 1.32f, -2.5f);
 	mu.rotate(gmu::MODEL, -20.0f, 1.0f, 0.0f, 0.0f);
 	mu.scale(gmu::MODEL, 0.08f, 0.35f, 0.08f);
 
@@ -693,7 +867,7 @@ void drawCar()
 
 	mu.pushMatrix(gmu::MODEL);
 
-	mu.translate(gmu::MODEL, 0.0f, 1.55f, -2.35f);
+	mu.translate(gmu::MODEL, 0.0f, 1.55f, -2.55f);
 	mu.scale(gmu::MODEL, 3.5f, 0.08f, 0.45f);
 	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
 
@@ -1047,6 +1221,7 @@ void buildScene()
 	renderer.TexObjArray.texture2D_Loader("assets/orange.jpg");      // 6
 	renderer.TexObjArray.texture2D_Loader("assets/tire.png");        // 7
 	renderer.TexObjArray.texture2D_Loader("assets/exhaust_metal.png"); // 8
+	renderer.TexObjArray.texture2D_Loader("assets/license.png");     // 9
 
 	// Scene geometry with triangle meshes
 
