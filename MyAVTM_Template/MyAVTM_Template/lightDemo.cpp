@@ -219,11 +219,15 @@ void static setCameraBehind()
 // For now the car does not move
 
 float carX = 0.0f;
-float carZ = 0.0f;
-float carAngle = 0.0f;
+float carZ = 15.0f;
+float carAngle = -90.0f;
 
 // Top of the floor in the current scene
 float carBaseY = env.getRoadSurfaceY();
+
+// Scale of the entire car
+const float CAR_SCALE = 0.8f;
+
 
 // ------------------------------------------------------------
 // Car keyboard state
@@ -270,14 +274,14 @@ struct AABB
 AABB carAABB;
 
 // Car bounding box dimensions
-const float CAR_MIN_X = -1.815f;
-const float CAR_MAX_X = 1.815f;
+const float CAR_MIN_X = -1.815f * CAR_SCALE;
+const float CAR_MAX_X = 1.815f * CAR_SCALE;
 
 const float CAR_MIN_Y = 0.0f;
-const float CAR_MAX_Y = 1.85f;
+const float CAR_MAX_Y = 1.85f * CAR_SCALE;
 
-const float CAR_MIN_Z = -3.15f;
-const float CAR_MAX_Z = 2.85f;
+const float CAR_MIN_Z = -3.15f * CAR_SCALE;
+const float CAR_MAX_Z = 2.85f * CAR_SCALE;
 
 
 // ------------------------------------------------------------
@@ -638,6 +642,7 @@ void drawCar()
 
 	mu.translate(gmu::MODEL, carX, carBaseY, carZ);
 	mu.rotate(gmu::MODEL, carAngle, 0.0f, 1.0f, 0.0f);
+	mu.scale(gmu::MODEL, CAR_SCALE, CAR_SCALE, CAR_SCALE);
 
 
 	// ------------------------------------------------------------
