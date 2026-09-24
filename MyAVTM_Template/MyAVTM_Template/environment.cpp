@@ -29,72 +29,130 @@ void Environment::init(Renderer& renderer, const Config& config) {
 
 void Environment::buildTrackLayout() {
 
-    roadBlocks.clear();
-    cheerioX.clear();
-    cheerioZ.clear();
-
-    // Metade do comprimento e largura do circuito, para facilitar os cálculos (pois o centro do circuito é a origem)
-    float outerHalfX = cfg.trackLength * 0.5f; // metade do comprimento do circuito
-    float outerHalfZ = cfg.trackWidth * 0.5f; // metade da largura do circuito
-    float halfRoad = cfg.roadWidth * 0.5f; // metade da largura da estrada
-
-    // Estrada do Topo
-    RoadBlock top;
-    top.centerX = 0.0f;
-    top.centerZ = -(outerHalfZ - halfRoad);
-    top.halfLengthX = outerHalfX;
-    top.halfLengthZ = halfRoad;
-    roadBlocks.push_back(top);
-
-    // Estrada de baixo
-    RoadBlock bottom = top;
-    bottom.centerZ = (outerHalfZ - halfRoad);
-    roadBlocks.push_back(bottom);
-
-    // Estrada da esquerda 
-    RoadBlock left;
-    left.centerX = -(outerHalfX - halfRoad);
-    left.centerZ = 0.0f;
-    left.halfLengthX = halfRoad;
-    left.halfLengthZ = outerHalfZ - cfg.roadWidth;
-    roadBlocks.push_back(left);
-
-    // Estrada da direita
-    RoadBlock right = left;
-    right.centerX = (outerHalfX - halfRoad);
-    roadBlocks.push_back(right);
-
-    // Defenir a altura dos cheerios 
-    float tableTop = cfg.tableHeight * 0.5f; // A divisão por 2 é porque a mesa é centrada na origem
-    cheerioY = tableTop + cfg.roadHeight + cfg.cheerioTubeRadius + cfg.cheerioYOffset;
-
-    // margem extreior e interior
-    placeCheeriosOnRectangle(outerHalfX, outerHalfZ, cfg.cheerioSpacing);
-    placeCheeriosOnRectangle(outerHalfX - cfg.roadWidth, outerHalfZ - cfg.roadWidth, cfg.cheerioSpacing);
-}
-
-void Environment::placeCheeriosOnRectangle(float halfX, float halfZ, float spacing) {
-
-    float sidesXZ[4][4] = {
-        { -halfX, -halfZ,  halfX, -halfZ }, // topo
-        {  halfX, -halfZ,  halfX,  halfZ }, // direita
-        {  halfX,  halfZ, -halfX,  halfZ }, // baixo
-        { -halfX,  halfZ, -halfX, -halfZ }  // esquerda
+    std::vector<PathPoint> rawPath = {
+        { -34.0f,  20.0f },  // P0: canto inferior esquerdo
+        { -34.0f,  -8.0f },  // P1: sobe
+        { -16.0f,  -8.0f },  // P2: vira à direita
+        { -16.0f, -22.0f },  // P3: sobe mais (torre do meio, mais alta)
+        {   2.0f, -22.0f },  // P4: topo, vira à direita
+        {   2.0f,   3.0f },  // P5: desce (braço direito de cima)
+        {  20.0f,   3.0f },  // P6: vira à direita
+        {  20.0f,  20.0f },  // P7: desce até à base
     };
 
-    for (int i = 0; i < 4; ++i) {
-        float x0 = sidesXZ[i][0], z0 = sidesXZ[i][1];
-        float x1 = sidesXZ[i][2], z1 = sidesXZ[i][3];
+	const float TRACK_SCALE = 2.0f;
 
-        float len = sqrtf((x1 - x0) * (x1 - x0) + (z1 - z0) * (z1 - z0)); // distância entre os dois pontos
-        int steps = (int)(len / spacing);
-        if (steps < 1) steps = 1;
+    // Bounding box original para centrar na mesa
+    float minX = rawPath[0].x, maxX = rawPath[0].x;
+    float minZ = rawPath[0].z, maxZ = rawPath[0].z;
+    for (const auto& p : rawPath) {
+        minX = std::min(minX, p.x); maxX = std::max(maxX, p.x);
+        minZ = std::min(minZ, p.z); maxZ = std::max(maxZ, p.z);
+    }
+    float centerX = (minX + maxX) * 0.5f;
+    float centerZ = (minZ + maxZ) * 0.5f;
 
-        for (int j = 0; j < steps; ++j) {
-            float t = (float)j / (float)steps; // parâmetro de interpolação entre 0 e 1 para distribuir os cheerios uniformemente sem sobreposição nos cantos
-            cheerioX.push_back(x0 + t * (x1 - x0));
-            cheerioZ.push_back(z0 + t * (z1 - z0));
-        }
+    // Centra na origem da mesa e escala as estradas (apenas mundando os pontos dos rawPaths)
+    trackPath.clear();
+    for (const auto& path : rawPath) {
+        trackPath.push_back({(path.x - centerX) * TRACK_SCALE, (path.z - centerZ) * TRACK_SCALE});
+    }
+
+    buildPathTrack(trackPath);
+
+    float halfRoad = cfg.roadWidth * 0.5f; // metade da largura da estrada
+    cheerioY = cfg.tableHeight * 0.5f + cfg.roadHeight + cfg.cheerioTubeRadius;
+
+    cheerios.clear();
+
+    const auto& Path = trackPath;
+
+    // Loop Exterior da pista
+    std::vector<PathPoint> outerRing = {
+        { Path[0].x - halfRoad, Path[0].z + halfRoad }, // exterior de P0 (baixo-esquerda)
+        { Path[1].x - halfRoad, Path[1].z - halfRoad }, // exterior de P1 (cima-esquerda)
+        { Path[2].x - halfRoad, Path[2].z - halfRoad }, // exterior de P2 (cima-esquerda)
+        { Path[3].x - halfRoad, Path[3].z - halfRoad }, // exterior de P3 (cima-esquerda)
+        { Path[4].x + halfRoad, Path[4].z - halfRoad }, // exterior de P4 (cima-direita)
+        { Path[5].x + halfRoad, Path[5].z - halfRoad }, // exterior de P5 (cima-direita)
+        { Path[6].x + halfRoad, Path[6].z - halfRoad }, // exterior de P6 (cima-direita)
+        { Path[7].x + halfRoad, Path[7].z + halfRoad }, // exterior de P7 (baixo-direita)
+    };
+
+    for (size_t i = 0; i < outerRing.size(); ++i) {
+        size_t next = (i + 1) % outerRing.size(); // fecha o ciclo (último -> primeiro)
+        placeCheeriosOnSegment(outerRing[i].x, outerRing[i].z,
+            outerRing[next].x, outerRing[next].z,
+            cfg.cheerioSpacing);
+    }
+
+    // Loop Interior da pista
+    std::vector<PathPoint> innerRing = {
+        { Path[0].x + halfRoad, Path[0].z - halfRoad }, // interior de P0
+        { Path[1].x + halfRoad, Path[1].z + halfRoad }, // interior de P1
+        { Path[2].x + halfRoad, Path[2].z + halfRoad }, // interior de P2
+        { Path[3].x + halfRoad, Path[3].z + halfRoad }, // interior de P3
+        { Path[4].x - halfRoad, Path[4].z + halfRoad }, // interior de P4
+        { Path[5].x - halfRoad, Path[5].z + halfRoad }, // interior de P5
+        { Path[6].x - halfRoad, Path[6].z + halfRoad }, // interior de P6
+        { Path[7].x - halfRoad, Path[7].z - halfRoad }, // interior de P7
+    };
+
+    for (size_t i = 0; i < innerRing.size(); ++i) {
+        size_t next = (i + 1) % innerRing.size();
+        placeCheeriosOnSegment(innerRing[i].x, innerRing[i].z,
+            innerRing[next].x, innerRing[next].z,
+            cfg.cheerioSpacing);
+    }
+}
+
+void Environment::buildPathTrack(const std::vector<PathPoint>& pts) {
+    roadBlocks.clear();
+    float halfRoad = cfg.roadWidth * 0.5f; // metade da largura da estrada
+    
+    for (size_t i = 0; i < pts.size(); ++i) {
+        size_t j = (i + 1) % pts.size(); // fecha o ciclo (último -> primeiro)
+        roadBlocks.push_back(makeSegment(pts[i].x, pts[i].z, pts[j].x, pts[j].z, halfRoad)); // cria um bloco de estrada e guarda-o
+    }
+}
+
+Environment::RoadBlock Environment::makeSegment(float x0, float z0, float x1, float z1, float halfRoad) {
+    RoadBlock roadBlock;
+    roadBlock.centerX = (x0 + x1) * 0.5f;
+    roadBlock.centerZ = (z0 + z1) * 0.5f;
+
+    bool horizontal = fabs(x1 - x0) > fabs(z1 - z0); // verifica se o segmento é horizontal ou vertical
+
+    if (horizontal) {
+        roadBlock.halfLengthX = fabs(x1 - x0) * 0.5f + halfRoad; // +halfRoad para tapar os cantos
+        roadBlock.halfLengthZ = halfRoad;
+    }
+    else {
+        roadBlock.halfLengthX = halfRoad;
+        roadBlock.halfLengthZ = fabs(z1 - z0) * 0.5f; // como já se tapou na horizontal não é preciso na vertical
+    }
+    return roadBlock;
+}
+
+// Coloca cheerios espaçados de forma uniforme numa linha reta entre dois pontos
+void Environment::placeCheeriosOnSegment(float x0, float z0, float x1, float z1, float spacing) {
+    float len = sqrtf((x1 - x0) * (x1 - x0) + (z1 - z0) * (z1 - z0));
+    int steps = (int)(len / spacing);
+    if (steps < 1) steps = 1;
+
+    for (int i = 0; i < steps; ++i) {
+        float t = (float)i / (float)steps; 
+
+        Cheerio cheerio;
+        cheerio.id = (int)cheerios.size();   // id = posição no vetor
+        cheerio.x = x0 + t * (x1 - x0);
+        cheerio.y = cheerioY;
+        cheerio.z = z0 + t * (z1 - z0);
+        cheerio.halfXZ = cfg.cheerioOuterRadius;
+        cheerio.halfY = cfg.cheerioTubeRadius;
+        cheerio.updateAABB();
+
+        cheerios.push_back(cheerio);
     }
 }
 
@@ -123,7 +181,8 @@ void Environment::spawnButters() {
         butter_i.z = minZ + t_z * (maxZ - minZ);
 
         butter_i.y = tableTop + cfg.roadHeight + (butter_i.sizeY * 0.5f);
-
+        
+        butter_i.updateAABB();
         butters.push_back(butter_i);
     }
 }
@@ -136,13 +195,13 @@ void Environment::spawnOranges() {
         // de movimento) para evitar que todas as laranjas apareçam exatamente no mesmo ponto
         orange.x += orange.vx * (((float)rand() / (float)RAND_MAX) * 2.0f);
         orange.z += orange.vz * (((float)rand() / (float)RAND_MAX) * 2.0f);
+        orange.updateAABB();
     }
 }
 
 void Environment::resetOrange(Orange& orange) {
     orange.radius = cfg.orangeDefaultRadius;
     float tableTop = cfg.tableHeight * 0.5f;
-    orange.y = tableTop + cfg.roadHeight + orange.radius;
 
     // Atribuir tipo aleatório
     int rType = rand() % 3;
@@ -161,6 +220,7 @@ void Environment::resetOrange(Orange& orange) {
         orange.baseSpeed = 12.0f;
         orange.radius = cfg.orangeDefaultRadius * 0.8f;
     }
+    orange.y = tableTop + cfg.roadHeight + orange.radius;
 
     int side = rand() % 4; //escolher lado da mesa
 	float halfTableX = cfg.tableWidth * 0.45f; // 0.45f para não sair da mesa
@@ -204,6 +264,7 @@ void Environment::resetOrange(Orange& orange) {
     orange.dirX = dirX;
     orange.dirZ = dirZ;
     orange.active = true;
+    orange.updateAABB();
 }
 
 // ------------------------ Update -------------------------
@@ -227,6 +288,7 @@ void Environment::update(float deltaTime) {
         // Movimento retilíneo
         orange.x += orange.vx * deltaTime;
         orange.z += orange.vz * deltaTime;
+        orange.updateAABB();
 
 		// Atualizar o ângulo de rotação com base na velocidade linear e no raio da laranja
         float angularSpeedRad = orange.speed / orange.radius;                   // ω = v / r
@@ -251,6 +313,8 @@ void Environment::render(Renderer& renderer, gmu& mu) {
     drawCheerios(renderer, mu);
     drawButters(renderer, mu);
     drawOranges(renderer, mu);
+    if (showBoundingBoxes)
+        drawBoundingBoxes(renderer, mu);
 }
 
 void Environment::drawTable(Renderer& renderer, gmu& mu) {
@@ -337,17 +401,18 @@ void Environment::drawFinishLine(Renderer& renderer, gmu& mu) {
     data.meshID = 0; // Cubo base
 	data.texMode = 2; // diffuse substituída pelo texel (usa texmap/TU0)
 
-    float outerHalfZ = cfg.trackWidth * 0.5f;
-    float halfRoad = cfg.roadWidth * 0.5f;
+    // O último troço do caminho é a base (último ponto -> primeiro ponto)
+    const PathPoint& a = trackPath.back();
+    const PathPoint& b = trackPath.front();
 
-    // Coordenadasdo meio da estrada da esquerda
-    float posX = -3.0f;
-    float posZ = (outerHalfZ - halfRoad);
-    // Eleva ligeiramente acima da estrada
+    float posX = (a.x + b.x) * 0.5f;   // centro do troço da base (ajusta o offset se quiseres deslocar a meta)
+    float posZ = (a.z + b.z) * 0.5f;
     float posY = cfg.tableHeight * 0.5f + cfg.roadHeight + 0.005f;
+	cfg.finishLinePosx = posX;
+	cfg.finishLinePosz = posZ;
 
-    float lineLengthX = 2.0f;                // Espessura visual da faixa na pista
-    float lineWidthZ = cfg.roadWidth;        // Atravessa a estrada de um lado ao outro
+    float lineLengthX = 2.0f;
+    float lineWidthZ = cfg.roadWidth;
     float lineHeightY = 0.01f;
 
     mu.pushMatrix(gmu::MODEL);
@@ -381,11 +446,10 @@ void Environment::drawCheerios(Renderer& renderer, gmu& mu) {
     data.meshID = 5; // Torus base
 	data.texMode = 0; // sem textura, só o material (cor do cheerio)
 
-    for (size_t i = 0; i < cheerioX.size(); ++i) {
-
+    for (const auto& c : cheerios) {
         mu.pushMatrix(gmu::MODEL);
-        mu.translate(gmu::MODEL, cheerioX[i], cheerioY, cheerioZ[i]);
-        mu.scale(gmu::MODEL, 0.6f, 0.6f, 0.6f);
+        mu.translate(gmu::MODEL, c.x, c.y, c.z);
+        mu.scale(gmu::MODEL, cfg.cheerioScale, cfg.cheerioScale, cfg.cheerioScale);
 
         mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
         mu.computeNormalMatrix3x3();
@@ -487,4 +551,45 @@ void Environment::drawOranges(Renderer& renderer, gmu& mu) {
 
         mu.popMatrix(gmu::MODEL);
     }
+}
+
+//TODO: REVER
+void Environment::drawBox(Renderer& renderer, gmu& mu, const AABB& b) {
+    dataMesh data;
+    data.meshID = 0;   // cubo
+    data.texMode = 0;  // só material
+
+    mu.pushMatrix(gmu::MODEL);
+    mu.translate(gmu::MODEL, b.minX, b.minY, b.minZ);
+    mu.scale(gmu::MODEL, b.maxX - b.minX, b.maxY - b.minY, b.maxZ - b.minZ);
+
+    mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+    mu.computeNormalMatrix3x3();
+
+    data.vm = mu.get(gmu::VIEW_MODEL);
+    data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+    data.normal = mu.getNormalMatrix();
+    renderer.renderMesh(data);
+
+    mu.popMatrix(gmu::MODEL);
+}
+
+void Environment::drawBoundingBoxes(Renderer& renderer, gmu& mu) {
+    // Verde puro: com diffuse/specular a 0, o shader devolve o ambient
+    float amb[]  = { 0.0f, 1.0f, 0.0f, 1.0f };
+    float zero[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+    memcpy(renderer.myMeshes[0].mat.ambient,  amb,  4 * sizeof(float));
+    memcpy(renderer.myMeshes[0].mat.diffuse,  zero, 4 * sizeof(float));
+    memcpy(renderer.myMeshes[0].mat.specular, zero, 4 * sizeof(float));
+    renderer.myMeshes[0].mat.shininess = 1.0f;
+
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glDisable(GL_CULL_FACE);
+
+    for (const auto& c : cheerios) drawBox(renderer, mu, c.box);
+    for (const auto& b : butters)  drawBox(renderer, mu, b.box);
+    for (const auto& o : oranges)  if (o.active) drawBox(renderer, mu, o.box);
+
+    glEnable(GL_CULL_FACE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
