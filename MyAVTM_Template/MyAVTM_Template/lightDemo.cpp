@@ -1020,7 +1020,11 @@ void renderSim(void)
 
 	// Desenha mesa / estrada / linha de meta / cheerios / manteigas / laranjas
 	env.render(renderer, mu);
-
+	// Draw the car at the start line on the first frame
+	if (FrameCount == 1) {
+		carX = env.getFinishLinePosx() + 3.0f;
+		carZ = env.getFinishLinePosz();
+	}
 	// Draw the car
 	drawCar();
 
@@ -1377,7 +1381,7 @@ void buildScene()
 	amesh.mat.texCount = texcount;
 	renderer.myMeshes.push_back(amesh);
 
-	// initialize the environment
+	// initialize the environment and position the car at the finish line
 	env.init(renderer);
 
 	// The truetypeInit creates a texture object in TexObjArray for storing the fontAtlasTexture

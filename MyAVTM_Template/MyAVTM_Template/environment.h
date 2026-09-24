@@ -14,26 +14,28 @@ public:
 
     struct Config {
         // Mesa 
-        float tableWidth = 100.0f;
-        float tableDepth = 100.0f;
+        float tableWidth = 150.0f;
+		float tableDepth = 120.0f;
         float tableHeight = 0.6f;
 
         // Circuito
-        float trackLength = 80.0f;  // comprimento do circuito (eixo X)
-        float trackWidth = 46.0f;   // largura do circuito (eixo Z)
         float roadWidth = 12.0f;     // largura de cada bloco de estrada
         float roadHeight = 0.08f;   // espessura da estrada (fica em cima da mesa)
 
         // Cheerios (margens)
         float cheerioOuterRadius = 0.9f;  // raio exterior do anel
         float cheerioTubeRadius = 0.28f;  // espessura do tubo
-        float cheerioSpacing = 1.6f;      // distância entre cheerios
+        float cheerioSpacing = 2.0f;      // distância entre cheerios
         float cheerioYOffset = 0.05f;     // espaçamento acima da estrada
 
         // Manteigas e Laranjas
-        int numButters = 6;
-        int numOranges = 4;
+        int numButters = 7;
+        int numOranges = 7;
         float orangeDefaultRadius = 0.8f;
+
+		// Linha de meta
+		float finishLinePosx = 0.0f; 
+		float finishLinePosz = 0.0f; 
     };
 
     enum class OrangeType { NORMAL, FAST, SLOW };
@@ -49,13 +51,15 @@ public:
         float rotationAngle = 0.0f; // ângulo de rotação enquanto rola
         bool active = true;
     };
-
+    
     struct Butter {
         float x = 0.0f, y = 0.0f, z = 0.0f;
-        float sizeX = 1.2f, sizeY = 0.8f, sizeZ = 1.6f;
+        float sizeX = 1.2f, sizeY = 0.5f, sizeZ = 1.6f;
     };
 
-    // Blocos da estrada para auxílio no posicionamento e futuras colisões
+    // Blocos da estrada e path points para auxílio no posicionamento
+    struct PathPoint { float x, z; };
+    
     struct RoadBlock {
         float centerX, centerZ;
         float halfLengthX, halfLengthZ;
@@ -71,6 +75,8 @@ public:
     const std::vector<Butter>& getButters()       const { return butters; }
     const std::vector<Orange>& getOranges()       const { return oranges; }
     float getCheerioRadius()                      const { return cfg.cheerioOuterRadius; }
+    float getFinishLinePosx()                     const { return cfg.finishLinePosx; }
+    float getFinishLinePosz()                     const { return cfg.finishLinePosz; }
 
     float getRoadSurfaceY() const {
         return (cfg.tableHeight * 0.5f) + cfg.roadHeight;
@@ -80,6 +86,7 @@ private:
     Config cfg;
     float totalPlayTime = 0.0f;
 
+    std::vector<PathPoint> trackPath;
     std::vector<RoadBlock> roadBlocks;
     std::vector<float> cheerioX, cheerioZ;
     float cheerioY = 0.0f;
@@ -88,7 +95,9 @@ private:
     std::vector<Butter> butters;
 
     void buildTrackLayout();
-    void placeCheeriosOnRectangle(float halfX, float halfZ, float spacing);
+    RoadBlock makeSegment(float x0, float z0, float x1, float z1, float halfRoad);
+    void buildPathTrack(const std::vector<PathPoint>& pts);
+    void placeCheeriosOnSegment(float x0, float z0, float x1, float z1, float spacing);
     void spawnButters();
     void spawnOranges();
     void resetOrange(Orange& orange);
