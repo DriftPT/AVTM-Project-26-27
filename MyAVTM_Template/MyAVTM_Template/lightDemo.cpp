@@ -69,12 +69,15 @@ bool orthoProj = false;
 bool perspProj = true;
 
 // Car state
-float carX = 0.0f;
-float carZ = 0.0f;
-float carAngle = 0.0f;
+float carX = 3.0f;
+float carZ = 42.0f;
+float carAngle = -90.0f;
 
 // Top of the floor in the current scene
 float carBaseY = env.getRoadSurfaceY();
+
+// Scale of the entire car
+const float CAR_SCALE = 0.8f;
 
 // Auxiliary variables
 bool fixedCamera = false;
@@ -215,20 +218,6 @@ void static setCameraBehind()
 #define MESH_CYLINDER 3
 #define MESH_CONE 4
 #define MESH_TORUS 5
-
-// ------------------------------------------------------------
-// Car state
-// For now the car does not move
-
-float carX = 3.0f;
-float carZ = 42.0f;
-float carAngle = -90.0f;
-
-// Top of the floor in the current scene
-float carBaseY = env.getRoadSurfaceY();
-
-// Scale of the entire car
-const float CAR_SCALE = 0.8f;
 
 // ------------------------------------------------------------
 // Car keyboard state
