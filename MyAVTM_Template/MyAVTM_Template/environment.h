@@ -24,9 +24,9 @@ public:
 
         // Cheerios (margens)
         float cheerioOuterRadius = 0.9f;  // raio exterior do anel
-        float cheerioTubeRadius = 0.28f;  // espessura do tubo
+        float cheerioTubeRadius = 0.3f;  // espessura do tubo
         float cheerioSpacing = 2.0f;      // distância entre cheerios
-        float cheerioYOffset = 0.05f;     // espaçamento acima da estrada
+		float cheerioScale = 0.6f;        // escala do cheerio em relação ao tamanho original
 
         // Manteigas e Laranjas
         int numButters = 7;
@@ -36,6 +36,12 @@ public:
 		// Linha de meta
 		float finishLinePosx = 0.0f; 
 		float finishLinePosz = 0.0f; 
+    };
+
+    struct AABB {
+        float minX, maxX;
+        float minY, maxY;
+        float minZ, maxZ;
     };
 
     enum class OrangeType { NORMAL, FAST, SLOW };
@@ -50,11 +56,39 @@ public:
         float radius = 1.0f;
         float rotationAngle = 0.0f; // ângulo de rotação enquanto rola
         bool active = true;
+        AABB box;
+
+        void updateAABB() {
+            box.minX = x - radius; box.maxX = x + radius;
+            box.minY = y - radius; box.maxY = y + radius;
+            box.minZ = z - radius; box.maxZ = z + radius;
+        }
     };
     
     struct Butter {
         float x = 0.0f, y = 0.0f, z = 0.0f;
         float sizeX = 1.2f, sizeY = 0.5f, sizeZ = 1.6f;
+        AABB box;
+
+        void updateAABB() {
+            box.minX = x - sizeX * 0.5f; box.maxX = x + sizeX * 0.5f;
+            box.minY = y - sizeY * 0.5f; box.maxY = y + sizeY * 0.5f;
+            box.minZ = z - sizeZ * 0.5f; box.maxZ = z + sizeZ * 0.5f;
+        }
+    };
+
+    struct Cheerio {
+        int id = 0;                  // índice no vetor cheerios
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        float halfXZ = 0.9f;         // meia-extensão em X e Z
+        float halfY = 0.3f;          // meia-extensão em Y
+        AABB box;
+
+        void updateAABB() {
+            box.minX = x - halfXZ; box.maxX = x + halfXZ;
+            box.minY = y - halfY;  box.maxY = y + halfY;
+            box.minZ = z - halfXZ; box.maxZ = z + halfXZ;
+        }
     };
 
     // Blocos da estrada e path points para auxílio no posicionamento
@@ -70,8 +104,7 @@ public:
     void render(Renderer& renderer, gmu& mu);
 
     const std::vector<RoadBlock>& getRoadBlocks() const { return roadBlocks; }
-    const std::vector<float>& getCheerioPosX()    const { return cheerioX; }
-    const std::vector<float>& getCheerioPosZ()    const { return cheerioZ; }
+    const std::vector<Cheerio>& getCheerios()     const { return cheerios; }
     const std::vector<Butter>& getButters()       const { return butters; }
     const std::vector<Orange>& getOranges()       const { return oranges; }
     float getCheerioRadius()                      const { return cfg.cheerioOuterRadius; }
@@ -82,17 +115,20 @@ public:
         return (cfg.tableHeight * 0.5f) + cfg.roadHeight;
     }
 
+    void toggleBoundingBoxes() { showBoundingBoxes = !showBoundingBoxes; }
+
 private:
     Config cfg;
     float totalPlayTime = 0.0f;
 
     std::vector<PathPoint> trackPath;
     std::vector<RoadBlock> roadBlocks;
-    std::vector<float> cheerioX, cheerioZ;
-    float cheerioY = 0.0f;
-
     std::vector<Orange> oranges;
     std::vector<Butter> butters;
+    std::vector<Cheerio> cheerios;
+
+    float cheerioY = 0.0f;
+    bool showBoundingBoxes = false;
 
     void buildTrackLayout();
     RoadBlock makeSegment(float x0, float z0, float x1, float z1, float halfRoad);
@@ -108,6 +144,8 @@ private:
     void drawCheerios(Renderer& renderer, gmu& mu);
     void drawOranges(Renderer& renderer, gmu& mu);
     void drawButters(Renderer& renderer, gmu& mu);
+    void drawBoundingBoxes(Renderer& renderer, gmu& mu);
+    void drawBox(Renderer& renderer, gmu& mu, const AABB& b);
 };
 
 #endif // _ENVIRONMENT_H_

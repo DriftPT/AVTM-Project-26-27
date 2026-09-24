@@ -61,10 +61,9 @@ void Environment::buildTrackLayout() {
     buildPathTrack(trackPath);
 
     float halfRoad = cfg.roadWidth * 0.5f; // metade da largura da estrada
-    cheerioY = cfg.tableHeight * 0.5f + cfg.roadHeight + cfg.cheerioTubeRadius + cfg.cheerioYOffset;
+    cheerioY = cfg.tableHeight * 0.5f + cfg.roadHeight + cfg.cheerioTubeRadius;
 
-    cheerioX.clear();
-    cheerioZ.clear();
+    cheerios.clear();
 
     const auto& Path = trackPath;
 
@@ -143,8 +142,17 @@ void Environment::placeCheeriosOnSegment(float x0, float z0, float x1, float z1,
 
     for (int i = 0; i < steps; ++i) {
         float t = (float)i / (float)steps; 
-        cheerioX.push_back(x0 + t * (x1 - x0));
-        cheerioZ.push_back(z0 + t * (z1 - z0));
+
+        Cheerio cheerio;
+        cheerio.id = (int)cheerios.size();   // id = posição no vetor
+        cheerio.x = x0 + t * (x1 - x0);
+        cheerio.y = cheerioY;
+        cheerio.z = z0 + t * (z1 - z0);
+        cheerio.halfXZ = cfg.cheerioOuterRadius;
+        cheerio.halfY = cfg.cheerioTubeRadius;
+        cheerio.updateAABB();
+
+        cheerios.push_back(cheerio);
     }
 }
 
@@ -173,7 +181,8 @@ void Environment::spawnButters() {
         butter_i.z = minZ + t_z * (maxZ - minZ);
 
         butter_i.y = tableTop + cfg.roadHeight + (butter_i.sizeY * 0.5f);
-
+        
+        butter_i.updateAABB();
         butters.push_back(butter_i);
     }
 }
@@ -186,13 +195,13 @@ void Environment::spawnOranges() {
         // de movimento) para evitar que todas as laranjas apareçam exatamente no mesmo ponto
         orange.x += orange.vx * (((float)rand() / (float)RAND_MAX) * 2.0f);
         orange.z += orange.vz * (((float)rand() / (float)RAND_MAX) * 2.0f);
+        orange.updateAABB();
     }
 }
 
 void Environment::resetOrange(Orange& orange) {
     orange.radius = cfg.orangeDefaultRadius;
     float tableTop = cfg.tableHeight * 0.5f;
-    orange.y = tableTop + cfg.roadHeight + orange.radius;
 
     // Atribuir tipo aleatório
     int rType = rand() % 3;
@@ -211,6 +220,7 @@ void Environment::resetOrange(Orange& orange) {
         orange.baseSpeed = 12.0f;
         orange.radius = cfg.orangeDefaultRadius * 0.8f;
     }
+    orange.y = tableTop + cfg.roadHeight + orange.radius;
 
     int side = rand() % 4; //escolher lado da mesa
 	float halfTableX = cfg.tableWidth * 0.45f; // 0.45f para não sair da mesa
@@ -254,6 +264,7 @@ void Environment::resetOrange(Orange& orange) {
     orange.dirX = dirX;
     orange.dirZ = dirZ;
     orange.active = true;
+    orange.updateAABB();
 }
 
 // ------------------------ Update -------------------------
@@ -277,6 +288,7 @@ void Environment::update(float deltaTime) {
         // Movimento retilíneo
         orange.x += orange.vx * deltaTime;
         orange.z += orange.vz * deltaTime;
+        orange.updateAABB();
 
 		// Atualizar o ângulo de rotação com base na velocidade linear e no raio da laranja
         float angularSpeedRad = orange.speed / orange.radius;                   // ω = v / r
@@ -301,6 +313,8 @@ void Environment::render(Renderer& renderer, gmu& mu) {
     drawCheerios(renderer, mu);
     drawButters(renderer, mu);
     drawOranges(renderer, mu);
+    if (showBoundingBoxes)
+        drawBoundingBoxes(renderer, mu);
 }
 
 void Environment::drawTable(Renderer& renderer, gmu& mu) {
@@ -432,11 +446,10 @@ void Environment::drawCheerios(Renderer& renderer, gmu& mu) {
     data.meshID = 5; // Torus base
 	data.texMode = 0; // sem textura, só o material (cor do cheerio)
 
-    for (size_t i = 0; i < cheerioX.size(); ++i) {
-
+    for (const auto& c : cheerios) {
         mu.pushMatrix(gmu::MODEL);
-        mu.translate(gmu::MODEL, cheerioX[i], cheerioY, cheerioZ[i]);
-        mu.scale(gmu::MODEL, 0.6f, 0.6f, 0.6f);
+        mu.translate(gmu::MODEL, c.x, c.y, c.z);
+        mu.scale(gmu::MODEL, cfg.cheerioScale, cfg.cheerioScale, cfg.cheerioScale);
 
         mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
         mu.computeNormalMatrix3x3();
@@ -538,4 +551,45 @@ void Environment::drawOranges(Renderer& renderer, gmu& mu) {
 
         mu.popMatrix(gmu::MODEL);
     }
+}
+
+//TODO: REVER
+void Environment::drawBox(Renderer& renderer, gmu& mu, const AABB& b) {
+    dataMesh data;
+    data.meshID = 0;   // cubo
+    data.texMode = 0;  // só material
+
+    mu.pushMatrix(gmu::MODEL);
+    mu.translate(gmu::MODEL, b.minX, b.minY, b.minZ);
+    mu.scale(gmu::MODEL, b.maxX - b.minX, b.maxY - b.minY, b.maxZ - b.minZ);
+
+    mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+    mu.computeNormalMatrix3x3();
+
+    data.vm = mu.get(gmu::VIEW_MODEL);
+    data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+    data.normal = mu.getNormalMatrix();
+    renderer.renderMesh(data);
+
+    mu.popMatrix(gmu::MODEL);
+}
+
+void Environment::drawBoundingBoxes(Renderer& renderer, gmu& mu) {
+    // Verde puro: com diffuse/specular a 0, o shader devolve o ambient
+    float amb[]  = { 0.0f, 1.0f, 0.0f, 1.0f };
+    float zero[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+    memcpy(renderer.myMeshes[0].mat.ambient,  amb,  4 * sizeof(float));
+    memcpy(renderer.myMeshes[0].mat.diffuse,  zero, 4 * sizeof(float));
+    memcpy(renderer.myMeshes[0].mat.specular, zero, 4 * sizeof(float));
+    renderer.myMeshes[0].mat.shininess = 1.0f;
+
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glDisable(GL_CULL_FACE);
+
+    for (const auto& c : cheerios) drawBox(renderer, mu, c.box);
+    for (const auto& b : butters)  drawBox(renderer, mu, b.box);
+    for (const auto& o : oranges)  if (o.active) drawBox(renderer, mu, o.box);
+
+    glEnable(GL_CULL_FACE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }

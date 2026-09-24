@@ -218,8 +218,8 @@ void static setCameraBehind()
 // Car state
 // For now the car does not move
 
-float carX = 0.0f;
-float carZ = 15.0f;
+float carX = 3.0f;
+float carZ = 42.0f;
 float carAngle = -90.0f;
 
 // Top of the floor in the current scene
@@ -236,6 +236,7 @@ bool keyW = false;
 bool keyS = false;
 bool keyA = false;
 bool keyD = false;
+bool paused = false;
 
 // ------------------------------------------------------------
 // Car movement
@@ -981,15 +982,16 @@ void renderSim(void)
 
 	lastUpdateTime = currentTime;
 
-
 	// Avoid huge jumps if the program freezes momentarily
 	if (dt > 0.05f)
 		dt = 0.05f;
 
 	// update the environment and car
-	env.update(dt);
-	updateCar(dt);
-
+	if (!paused)
+	{
+		env.update(dt);
+		updateCar(dt);
+	}
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -1020,11 +1022,6 @@ void renderSim(void)
 
 	// Desenha mesa / estrada / linha de meta / cheerios / manteigas / laranjas
 	env.render(renderer, mu);
-	// Draw the car at the start line on the first frame
-	if (FrameCount == 1) {
-		carX = env.getFinishLinePosx() + 3.0f;
-		carZ = env.getFinishLinePosz();
-	}
 	// Draw the car
 	drawCar();
 
@@ -1035,7 +1032,10 @@ void renderSim(void)
 	if (fontLoaded)
 	{
 		glDisable(GL_DEPTH_TEST);
-		TextCommand textCmd = {"AVTM 2026 Welcome:\nGood Luck!", {100, 100}, 0.5};
+		TextCommand textCmd = {paused ? std::string("PAUSED\nPress P to resume")
+									  : std::string("AVTM 2026 Welcome:\nGood Luck!"),
+								      {100, 100}, 0.5
+							  };
 		// the glyph contains transparent background colors and non-transparent for the actual character pixels. So we use the blending
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1093,6 +1093,17 @@ void processKeys(unsigned char key, int xx, int yy)
 		case 'D':
 			keyD = true;
 			break;
+		
+		case 'b':
+		case 'B':
+			env.toggleBoundingBoxes();
+			break;
+		
+			case 'p':
+			case 'P':
+				paused = !paused;
+				printf(paused ? "Game paused\n" : "Game resumed\n");
+				break;
 
 		case 'c': 
 			printf("Camera Spherical Coordinates (%f, %f, %f)\n", alpha, _beta, r);
