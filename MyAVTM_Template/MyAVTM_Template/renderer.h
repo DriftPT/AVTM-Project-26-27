@@ -54,6 +54,12 @@ public:
 
   void setLightPos(float *lightPos);
 
+  void setGlobalLight(bool on, float globalLightPos[4]);
+
+  void setCandlesLights(bool on, float candlesPos[6][4]);
+
+  void setSpotLights(bool on, float spotLightPos[2][4]);
+
   void setSpotParam(float *coneDir, float cutOff);
 
   void setSpotLightMode(bool spotLightMode);

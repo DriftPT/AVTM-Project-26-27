@@ -64,9 +64,12 @@ float camX, camY, camZ;
 float alpha = 57.0f, _beta = 18.0f;
 float r = 45.0f;
 
-// Projections Booleans
+// Projections Variables
 bool orthoProj = false;
 bool perspProj = true;
+const float PERSPECTIVE_FOV = 53.13f;
+const float ORTHO_SIZE = 30.0f;
+const float TOP_CAMERA_HEIGHT = 70.0f;
 
 // Car starting position (start line)
 float CAR_START_X = 0;
@@ -87,6 +90,8 @@ const float CAR_SCALE = 0.8f;
 bool fixedCamera = false;
 bool trackingCamera = false;
 float cameraOrientation = 0.0f;
+bool globalIllumination = false;
+bool candlesIllumination = false;
 
 // Mouse Tracking Variables
 int startX, startY, tracking = 0;
@@ -96,12 +101,29 @@ int startX, startY, tracking = 0;
 long myTime, timebase = 0, frame = 0;
 char s[32];
 
-// float lightPos[4] = {4.0f, 5.0f, 2.0f, 1.0f};
-float lightPos[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+// Global Illumination - Directional
+float globalLightPos[4] = { 0.0f, 20.0f, 0.0f, 0.0f };
+
+// 6 Candles Lights Positions - Pontual 
+float candles[6][4] = {
+	{ -60.0f, 10.0f, 25.0f, 1.0f },
+	{ -20.0f, 10.0f, -19.0f, 1.0f },
+	{ 20.0f, 10.0f, -45.0f, 1.0f },
+	{ 20.0f, 10.0f, 8.0f, 1.0f },
+	{ -10.0f, 10.0f, 42.0f, 1.0f },
+	{ 60.0f, 10.0f, 42.0f, 1.0f }
+};
 
 // Spotlight
+bool carHeadlights = false;
+float carHeadlightsPos[2][4] = {
+	{ -0.5f, 0.5f, 1.5f, 1.0f },
+	{ 0.5f, 0.5f, 1.5f, 1.0f }
+};
+
+
 bool spotlight_mode = false;
-float coneDir[4] = {0.0f, -0.0f, -1.0f, 0.0f};
+float coneDir[4] = { 0.0f, -0.0f, -1.0f, 0.0f };
 
 bool fontLoaded = false;
 
@@ -137,6 +159,8 @@ void changeSize(int w, int h)
 	// Prevent a divide by zero, when window is too short
 	if (h == 0)
 		h = 1;
+	WinX = w;
+	WinY = h;
 	// set the viewport to be the entire window
 	glViewport(0, 0, w, h);
 	// set the projection matrix
@@ -144,12 +168,12 @@ void changeSize(int w, int h)
 	if (perspProj)
 	{
 		mu.loadIdentity(gmu::PROJECTION);
-		mu.perspective(53.13f, ratio, 0.1f, 1000.0f);
+		mu.perspective(PERSPECTIVE_FOV, ratio, 0.1f, 1000.0f);
 	}
 	else if (orthoProj)
 	{
 		mu.loadIdentity(gmu::PROJECTION);
-		mu.ortho(-30.0f * ratio, 30.0f * ratio, -30.0f, 30.0f, -100.0f, 100.0f);
+		mu.ortho(-ORTHO_SIZE * ratio, ORTHO_SIZE * ratio, -ORTHO_SIZE, ORTHO_SIZE, -100.0f, 100.0f);
 	}
 }
 
@@ -170,12 +194,12 @@ void updateProjection()
 	if (perspProj)
 	{
 		mu.loadIdentity(gmu::PROJECTION);
-		mu.perspective(53.13f, ratio, 0.1f, 1000.0f);
+		mu.perspective(PERSPECTIVE_FOV, ratio, 0.1f, 1000.0f);
 	}
 	else if (orthoProj)
 	{
 		mu.loadIdentity(gmu::PROJECTION);
-		mu.ortho(-30.0f * ratio, 30.0f * ratio, -30.0f, 30.0f, -100.0f, 100.0f);
+		mu.ortho(-ORTHO_SIZE * ratio, ORTHO_SIZE * ratio, -ORTHO_SIZE, ORTHO_SIZE, -100.0f, 100.0f);
 	}
 	glutPostRedisplay(); // viewport refresh
 }
@@ -190,7 +214,7 @@ void static setCameraOver()
 {
 	alpha = 0.0f;
 	_beta = 90.0f; // Over Camera Spherical Coordinates
-	r = 45.0f;
+	r = TOP_CAMERA_HEIGHT;
 	camX = r * sin(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
 	camZ = r * cos(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
 	camY = r * sin(_beta * 3.14f / 180.0f);
@@ -206,7 +230,7 @@ void static setCameraBehind()
 {
 	alpha = 180.0f + carAngle + cameraOrientation;
 	_beta = 20.0f; // Behind Camera Spherical Coordinates - alpha horizontal rotation - beta vertical rotation
-	r = 45.0f;
+	r = TOP_CAMERA_HEIGHT;
 	camX = carX + r * sin(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
 	camZ = carZ + r * cos(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
 	camY = carBaseY + r * sin(_beta * 3.14f / 180.0f);
@@ -1131,6 +1155,40 @@ void drawCarAABB()
 	mu.popMatrix(gmu::MODEL);
 }
 
+// ------------------------------------------------------------
+// Candles Help debugger
+// To Be Deleted !!!
+//
+
+void drawCandleMarkers() {
+	CarMaterial candleMarkerMaterial = {
+		{ 0.20f, 0.12f, 0.02f, 1.0f },
+		{ 1.00f, 0.55f, 0.10f, 1.0f },
+		{ 1.00f, 0.80f, 0.30f, 1.0f },
+		80.0f
+	};
+
+	setMeshMaterial(MESH_SPHERE, candleMarkerMaterial);
+
+	for (int i = 0; i < 6; i++)
+	{
+		mu.pushMatrix(gmu::MODEL);
+
+		mu.translate(
+			gmu::MODEL,
+			candles[i][0],
+			candles[i][1],
+			candles[i][2]
+		);
+
+		mu.scale(gmu::MODEL, 0.25f, 0.25f, 0.25f);
+
+		drawMesh(MESH_SPHERE);
+
+		mu.popMatrix(gmu::MODEL);
+	}
+}
+
 
 
 // ------------------------------------------------------------
@@ -1177,19 +1235,47 @@ void renderSim(void)
 		// Camera tracking the car
 		setCameraBehind();
 	}
+	else if (orthoProj || fixedCamera)
+	{
+		// Top camera.
+		mu.lookAt(camX, camY, camZ, 0, 0, 0, 0, 0, -1);
+	}
 	else
+	{
+		// Normal camera
 		mu.lookAt(camX, camY, camZ, 0, 0, 0, 0, 1, 0);
+	}
 
-	// send the light position in eye coordinates
-	renderer.setLightPos(lightPos); // efeito capacete do mineiro, ou seja lighPos foi definido em eye coord
 
 	// float lposAux[4];
 	// mu.multMatrixPoint(gmu::VIEW, lightPos, lposAux);   //lightPos definido em World Coord so is converted to eye space
 	// renderer.setLightPos(lposAux);
 
-	// Spotlight settings
-	renderer.setSpotLightMode(spotlight_mode);
-	renderer.setSpotParam(coneDir, 0.93);
+	// ----------------------------
+	// Lights Settings
+	// ----------------------------
+
+	float gloablLightPosEye[4];
+	float carHeadlightsEye[2][4];
+	float candlesEye[6][4];
+
+	// Global Illumination settings in eye coordinates
+	mu.multMatrixPoint(gmu::VIEW, globalLightPos, gloablLightPosEye);
+	renderer.setGlobalLight(globalIllumination, gloablLightPosEye);
+
+	// Spotlight settings in eye coordinates
+	for (int i = 0; i < 2; i++) {
+		mu.multMatrixPoint(gmu::VIEW, carHeadlightsPos[i], carHeadlightsEye[i]);
+	}
+	renderer.setSpotLights(carHeadlights, carHeadlightsEye);
+
+	// Candles settigs in eye coordinates
+	for (int i = 0; i < 6; i++) {
+		mu.multMatrixPoint(gmu::VIEW, candles[i], candlesEye[i]);
+	}
+	renderer.setCandlesLights(candlesIllumination, candlesEye);
+
+	drawCandleMarkers();
 
 	// Desenha mesa / estrada / linha de meta / cheerios / manteigas / laranjas
 	env.render(renderer, mu);
@@ -1276,11 +1362,6 @@ void processKeys(unsigned char key, int xx, int yy)
 		paused = !paused;
 		printf(paused ? "Game paused\n" : "Game resumed\n");
 		break;
-
-	case 'c':
-		printf("Camera Spherical Coordinates (%f, %f, %f)\n", alpha, _beta, r);
-		break;
-
 	case 'l': // toggle spotlight mode
 		if (!spotlight_mode)
 		{
@@ -1301,13 +1382,6 @@ void processKeys(unsigned char key, int xx, int yy)
 		camX = r * sin(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
 		camZ = r * cos(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
 		camY = r * sin(_beta * 3.14f / 180.0f);
-		break;
-
-	case 'm':
-		glEnable(GL_MULTISAMPLE);
-		break;
-	case 'n':
-		glDisable(GL_MULTISAMPLE);
 		break;
 	case '1':
 		orthoProj = true;
@@ -1336,6 +1410,21 @@ void processKeys(unsigned char key, int xx, int yy)
 		setCameraBehind();
 		updateProjection();
 		printf("Movable Camera - Perspective projection [%d]\n", perspProj);
+		break;
+	case 'N':
+	case 'n':
+		globalIllumination = !globalIllumination;
+		printf("Global Illumination [%d]\n", globalIllumination);
+		break;
+	case 'C':
+	case 'c':
+		candlesIllumination = !candlesIllumination;
+		printf("Candles Illumination [%d]\n", candlesIllumination);
+		break;
+	case 'H':
+	case 'h':
+		carHeadlights = !carHeadlights;
+		printf("Car Headlights [%d]\n", carHeadlights);
 		break;
 	}
 }

@@ -219,6 +219,57 @@ void Renderer::setLightPos(float* lightPos) {
     glUniform4fv(lpos_loc, 1, lightPos);
 }
 
+void Renderer::setGlobalLight(bool on, float globalLightPos[4]) {
+    GLint loc = glGetUniformLocation(program, "globalLightOn");
+    if (on)
+        glUniform1i(loc, 1);
+    else
+        glUniform1i(loc, 0);
+
+    loc = glGetUniformLocation(program, "globalLightPos");
+    glUniform4fv(loc, 1, globalLightPos);
+}
+
+void Renderer::setCandlesLights(bool on, float candlesPos[6][4]) {
+    GLint loc = glGetUniformLocation(program, "candlesLightOn");
+    if (on)
+        glUniform1i(loc, 1);
+    else
+        glUniform1i(loc, 0);
+
+    const char* posNames[6] = {
+        "candlesLightPos0",
+        "candlesLightPos1",
+        "candlesLightPos2",
+        "candlesLightPos3",
+        "candlesLightPos4",
+        "candlesLightPos5"
+    };
+
+    for (int i = 0; i < 6; i++) {
+        loc = glGetUniformLocation(program, posNames[i]);
+        glUniform4fv(loc, 1, candlesPos[i]);
+    }
+}
+
+void Renderer::setSpotLights(bool on, float spotLightPos[2][4]) {
+    GLint loc = glGetUniformLocation(program, "spotlight_mode");
+    if (on)
+        glUniform1i(loc, 1);
+    else
+        glUniform1i(loc, 0);
+
+    const char* posNames[2] = {
+        "spotLightPos0",
+        "spotLightPos1",
+    };
+
+    for (int i = 0; i < 2; i++) {
+        loc = glGetUniformLocation(program, posNames[i]);
+        glUniform4fv(loc, 1, spotLightPos[i]);
+    }
+}
+
 void Renderer::setTexUnit(int tuId, int texObjArray_pos) {
     glActiveTexture(GL_TEXTURE0 + tuId);
     glBindTexture(GL_TEXTURE_2D, TexObjArray.getTextureId(texObjArray_pos));
