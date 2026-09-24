@@ -14,18 +14,19 @@ public:
 
     struct Config {
         // Mesa 
-        float tableWidth = 160.0f;
-		float tableDepth = 130.0f;
+        float tableWidth = 190.0f;
+		float tableDepth = 160.0f;
         float tableHeight = 0.6f;
 
         // Circuito
-        float roadWidth = 16.0f;     // largura de cada bloco de estrada
+        float roadWidth = 17.0f;     // largura de cada bloco de estrada
         float roadHeight = 0.08f;   // espessura da estrada (fica em cima da mesa)
+        float roadScale = 2.2f;     // fator de escala da estrada
 
         // Cheerios (margens)
         float cheerioOuterRadius = 0.9f;  // raio exterior do anel
         float cheerioTubeRadius = 0.3f;  // espessura do tubo
-        float cheerioSpacing = 2.0f;      // distância entre cheerios
+        float cheerioSpacing = 2.5f;      // distância entre cheerios
 		float cheerioScale = 0.6f;        // escala do cheerio em relação ao tamanho original
 
         // Manteigas e Laranjas
@@ -47,6 +48,7 @@ public:
     enum class OrangeType { NORMAL, FAST, SLOW };
 
     struct Orange {
+        int id = 0;
         OrangeType type = OrangeType::NORMAL;
         float x = 0.0f, y = 0.0f, z = 0.0f;
         float vx = 0.0f, vz = 0.0f; // velocidade linear
@@ -119,6 +121,7 @@ public:
     void toggleBoundingBoxes() { showBoundingBoxes = !showBoundingBoxes; }
     void nudgeCheerio(int id, float dx, float dz);
     void hitButter(int id);
+    void hitOrange(int id);
 
 private:
     Config cfg;

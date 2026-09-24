@@ -68,10 +68,14 @@ float r = 45.0f;
 bool orthoProj = false;
 bool perspProj = true;
 
-// Car state
-float carX = 3.0f;
-float carZ = 42.0f;
-float carAngle = -90.0f;
+// Car starting position (start line)
+float CAR_START_X = 0;
+float CAR_START_Z = 0;
+const float CAR_START_ANGLE = -90.0f;
+
+float carX = CAR_START_X;
+float carZ = CAR_START_Z;
+float carAngle = CAR_START_ANGLE;
 
 // Top of the floor in the current scene
 float carBaseY = env.getRoadSurfaceY();
@@ -421,12 +425,22 @@ void updateCarAABB()
 	carAABB.maxY = carBaseY + CAR_MAX_Y;
 }
 
+void resetCarToStart()
+{
+    carX = CAR_START_X;
+    carZ = CAR_START_Z;
+    carAngle = CAR_START_ANGLE;
+    carVelocity = 0.0f;
+    carAcceleration = 0.0f;
+    updateCarAABB();
+}
+
 void handleCollisions(float oldX, float oldZ)
 {
 	const auto& cheerios = env.getCheerios();
 	const auto& butters  = env.getButters();
 	const auto& oranges  = env.getOranges();
-	const float CHEERIO_PUSH = 0.2f; // o quanto o cheerio se move quando é atingido
+	const float CHEERIO_PUSH = 0.5f; // o quanto o cheerio se move quando é atingido
 
 	// CHEERIOS 
 	for (const auto& c : cheerios)
@@ -447,7 +461,7 @@ void handleCollisions(float oldX, float oldZ)
 			if (len > 0.0001f) { dx /= len; dz /= len; } // normalização do vetor de deslocamento
 			env.nudgeCheerio(c.id, dx * CHEERIO_PUSH, dz * CHEERIO_PUSH);
 
-			return;
+			break;
 		}
 	}
 
@@ -463,7 +477,7 @@ void handleCollisions(float oldX, float oldZ)
 			updateCarAABB();
 
 			env.hitButter(b.id);
-			return;
+			break;
 		}
 	}
 
@@ -472,8 +486,9 @@ void handleCollisions(float oldX, float oldZ)
 	{
 		if (o.active && boxesOverlap(carAABB, o.box))
 		{
-			// TODO: perder a corrida -> repor o carro na linha de partida
-			//       (env.getFinishLinePosx() e env.getFinishLinePosz() já existem para isso)
+			resetCarToStart();     // repõe posição, velocidade e AABB do carro
+        	env.hitOrange(o.id);
+			break;
 		}
 	}
 }
@@ -1551,6 +1566,11 @@ void buildScene()
 	// initialize the environment and position the car at the finish line
 	env.init(renderer);
 
+	// Definir a posição inicial do carro na meta
+	CAR_START_X = carX = env.getFinishLinePosx() + 3.0f;
+	CAR_START_Z = carZ = env.getFinishLinePosz();
+	updateCarAABB();
+	
 	// The truetypeInit creates a texture object in TexObjArray for storing the fontAtlasTexture
 
 	fontLoaded = renderer.truetypeInit(fontPathFile);

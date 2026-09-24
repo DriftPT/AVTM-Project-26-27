@@ -40,8 +40,6 @@ void Environment::buildTrackLayout() {
         {  20.0f,  20.0f },  // P7: desce até à base
     };
 
-	const float TRACK_SCALE = 2.0f;
-
     // Bounding box original para centrar na mesa
     float minX = rawPath[0].x, maxX = rawPath[0].x;
     float minZ = rawPath[0].z, maxZ = rawPath[0].z;
@@ -55,10 +53,16 @@ void Environment::buildTrackLayout() {
     // Centra na origem da mesa e escala as estradas (apenas mundando os pontos dos rawPaths)
     trackPath.clear();
     for (const auto& path : rawPath) {
-        trackPath.push_back({(path.x - centerX) * TRACK_SCALE, (path.z - centerZ) * TRACK_SCALE});
+        trackPath.push_back({(path.x - centerX) * cfg.roadScale, (path.z - centerZ) * cfg.roadScale});
     }
 
     buildPathTrack(trackPath);
+
+    // Define a posição da linha de meta
+    const PathPoint& a = trackPath.back();
+    const PathPoint& b = trackPath.front();
+    cfg.finishLinePosx = (a.x + b.x) * 0.5f;
+    cfg.finishLinePosz = (a.z + b.z) * 0.5f;
 
     float halfRoad = cfg.roadWidth * 0.5f; // metade da largura da estrada
     cheerioY = cfg.tableHeight * 0.5f + cfg.roadHeight + cfg.cheerioTubeRadius;
@@ -190,13 +194,14 @@ void Environment::spawnButters() {
 
 void Environment::spawnOranges() {
     oranges.resize(cfg.numOranges);
-    for (auto& orange : oranges) {
-        resetOrange(orange);
+    for (size_t i = 0; i < oranges.size(); ++i) {
+        oranges[i].id = (int)i;
+        resetOrange(oranges[i]);
 		// Adicionar uma pequena variação aleatória à posição inicial (como se fosse 2 segundos
         // de movimento) para evitar que todas as laranjas apareçam exatamente no mesmo ponto
-        orange.x += orange.vx * (((float)rand() / (float)RAND_MAX) * 2.0f);
-        orange.z += orange.vz * (((float)rand() / (float)RAND_MAX) * 2.0f);
-        orange.updateAABB();
+        oranges[i].x += oranges[i].vx * (((float)rand() / (float)RAND_MAX) * 2.0f);
+        oranges[i].z += oranges[i].vz * (((float)rand() / (float)RAND_MAX) * 2.0f);
+        oranges[i].updateAABB();
     }
 }
 
@@ -409,12 +414,8 @@ void Environment::drawFinishLine(Renderer& renderer, gmu& mu) {
     data.meshID = 0; // Cubo base
 	data.texMode = 2; // diffuse substituída pelo texel (usa texmap/TU0)
 
-    // O último troço do caminho é a base (último ponto -> primeiro ponto)
-    const PathPoint& a = trackPath.back();
-    const PathPoint& b = trackPath.front();
-
-    float posX = (a.x + b.x) * 0.5f;   // centro do troço da base (ajusta o offset se quiseres deslocar a meta)
-    float posZ = (a.z + b.z) * 0.5f;
+    float posX = cfg.finishLinePosx;
+    float posZ = cfg.finishLinePosz;
     float posY = cfg.tableHeight * 0.5f + cfg.roadHeight + 0.005f;
 	cfg.finishLinePosx = posX;
 	cfg.finishLinePosz = posZ;
@@ -618,4 +619,9 @@ void Environment::nudgeCheerio(int id, float dx, float dz) {
 void Environment::hitButter(int id) {
     if (id < 0 || id >= (int)butters.size()) return;
     butters[id].shakeTimer = 0.8f; // dura 0.8s
+}
+
+void Environment::hitOrange(int id) {
+    if (id < 0 || id >= (int)oranges.size()) return;
+    resetOrange(oranges[id]);
 }
