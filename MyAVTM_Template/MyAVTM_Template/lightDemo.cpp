@@ -262,6 +262,9 @@ struct AABB
 
 AABB carAABB;
 
+bool showCarAABB = false;
+void toggleCarAABB() { showCarAABB = !showCarAABB; }
+
 // Car bounding box dimensions
 const float CAR_MIN_X = -1.815f * CAR_SCALE;
 const float CAR_MAX_X = 1.815f * CAR_SCALE;
@@ -330,7 +333,6 @@ CarMaterial boundingBoxMaterial = {
 	{ 1.0f, 0.0f, 0.0f, 1.0f },
 	10.0f
 };
-bool showCarAABB = true;
 
 void setMeshMaterial(int meshID, const CarMaterial &material)
 {
@@ -1189,6 +1191,7 @@ void processKeys(unsigned char key, int xx, int yy)
 	case 'b':
 	case 'B':
 		env.toggleBoundingBoxes();
+		toggleCarAABB();
 		break;
 
 	case 'p':
