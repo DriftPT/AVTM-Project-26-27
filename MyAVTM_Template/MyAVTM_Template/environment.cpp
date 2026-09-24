@@ -162,6 +162,7 @@ void Environment::spawnButters() {
 
     for (int i = 0; i < cfg.numButters; ++i) {
         Butter butter_i;
+        butter_i.id = (int)butters.size();
         int blockIdx = rand() % roadBlocks.size();
         const RoadBlock& road = roadBlocks[blockIdx];
 
@@ -301,6 +302,13 @@ void Environment::update(float deltaTime) {
         // Respawn ao sair da mesa
         if (fabs(orange.x) > limitX || fabs(orange.z) > limitZ) {
             resetOrange(orange);
+        }
+    }
+
+    for (auto& b : butters) {
+        if (b.shakeTimer > 0.0f) {
+            b.shakeTimer -= deltaTime;
+            if (b.shakeTimer < 0.0f) b.shakeTimer = 0.0f;
         }
     }
 }
@@ -481,6 +489,11 @@ void Environment::drawButters(Renderer& renderer, gmu& mu) {
 
         mu.pushMatrix(gmu::MODEL);
         mu.translate(gmu::MODEL, butter.x, butter.y, butter.z);
+        if (butter.shakeTimer > 0.0f) {
+            float amplitude = 15.0f * (butter.shakeTimer / 0.8f); // O quão exagerado é o abanão em cada instante (0.8=segundos totais)
+            float angle = sinf(butter.shakeTimer * 40.0f) * amplitude; // O ângulo de abanamento o 40 é o número de ondas por segundo
+            mu.rotate(gmu::MODEL, angle, 0.0f, 1.0f, 0.0f); // abana em torno do eixo Y
+        }
         mu.scale(gmu::MODEL, butter.sizeX, butter.sizeY, butter.sizeZ);
         mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
 
@@ -552,6 +565,7 @@ void Environment::drawOranges(Renderer& renderer, gmu& mu) {
         mu.popMatrix(gmu::MODEL);
     }
 }
+// ------------------------ Extras ------------------------
 
 //TODO: REVER
 void Environment::drawBox(Renderer& renderer, gmu& mu, const AABB& b) {
@@ -592,4 +606,16 @@ void Environment::drawBoundingBoxes(Renderer& renderer, gmu& mu) {
 
     glEnable(GL_CULL_FACE);
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+}
+
+void Environment::nudgeCheerio(int id, float dx, float dz) {
+    if (id < 0 || id >= (int)cheerios.size()) return;
+    cheerios[id].x += dx;
+    cheerios[id].z += dz;
+    cheerios[id].updateAABB();
+}
+
+void Environment::hitButter(int id) {
+    if (id < 0 || id >= (int)butters.size()) return;
+    butters[id].shakeTimer = 0.8f; // dura 0.8s
 }

@@ -14,12 +14,12 @@ public:
 
     struct Config {
         // Mesa 
-        float tableWidth = 150.0f;
-		float tableDepth = 120.0f;
+        float tableWidth = 160.0f;
+		float tableDepth = 130.0f;
         float tableHeight = 0.6f;
 
         // Circuito
-        float roadWidth = 12.0f;     // largura de cada bloco de estrada
+        float roadWidth = 16.0f;     // largura de cada bloco de estrada
         float roadHeight = 0.08f;   // espessura da estrada (fica em cima da mesa)
 
         // Cheerios (margens)
@@ -29,7 +29,7 @@ public:
 		float cheerioScale = 0.6f;        // escala do cheerio em relação ao tamanho original
 
         // Manteigas e Laranjas
-        int numButters = 7;
+        int numButters = 10;
         int numOranges = 7;
         float orangeDefaultRadius = 0.8f;
 
@@ -66,8 +66,10 @@ public:
     };
     
     struct Butter {
+        int id = 0; 
         float x = 0.0f, y = 0.0f, z = 0.0f;
         float sizeX = 1.2f, sizeY = 0.5f, sizeZ = 1.6f;
+        float shakeTimer = 0.0f;
         AABB box;
 
         void updateAABB() {
@@ -78,7 +80,7 @@ public:
     };
 
     struct Cheerio {
-        int id = 0;                  // índice no vetor cheerios
+        int id = 0;
         float x = 0.0f, y = 0.0f, z = 0.0f;
         float halfXZ = 0.9f;         // meia-extensão em X e Z
         float halfY = 0.3f;          // meia-extensão em Y
@@ -114,8 +116,9 @@ public:
     float getRoadSurfaceY() const {
         return (cfg.tableHeight * 0.5f) + cfg.roadHeight;
     }
-
     void toggleBoundingBoxes() { showBoundingBoxes = !showBoundingBoxes; }
+    void nudgeCheerio(int id, float dx, float dz);
+    void hitButter(int id);
 
 private:
     Config cfg;

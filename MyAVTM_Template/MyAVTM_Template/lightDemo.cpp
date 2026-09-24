@@ -253,14 +253,8 @@ int lastUpdateTime = 0;
 // COLISIONS
 // ------------------------------------------------------------
 // Axis-Aligned Bounding Box structure
-struct AABB
-{
-	float minX, maxX;
-	float minY, maxY;
-	float minZ, maxZ;
-};
 
-AABB carAABB;
+Environment::AABB carAABB;
 
 bool showCarAABB = false;
 void toggleCarAABB() { showCarAABB = !showCarAABB; }
@@ -274,6 +268,15 @@ const float CAR_MAX_Y = 1.85f * CAR_SCALE;
 
 const float CAR_MIN_Z = -3.15f * CAR_SCALE;
 const float CAR_MAX_Z = 2.85f * CAR_SCALE;
+
+// check if two AABBs overlap
+template <typename BoxA, typename BoxB>
+bool boxesOverlap(const BoxA& a, const BoxB& b)
+{
+    return (a.minX <= b.maxX && a.maxX >= b.minX) &&
+           (a.minY <= b.maxY && a.maxY >= b.minY) &&
+           (a.minZ <= b.maxZ && a.maxZ >= b.minZ);
+}
 
 // ------------------------------------------------------------
 // MATERIALS
@@ -418,6 +421,63 @@ void updateCarAABB()
 	carAABB.maxY = carBaseY + CAR_MAX_Y;
 }
 
+void handleCollisions(float oldX, float oldZ)
+{
+	const auto& cheerios = env.getCheerios();
+	const auto& butters  = env.getButters();
+	const auto& oranges  = env.getOranges();
+	const float CHEERIO_PUSH = 0.2f; // o quanto o cheerio se move quando é atingido
+
+	// CHEERIOS 
+	for (const auto& c : cheerios)
+	{
+		if (boxesOverlap(carAABB, c.box))
+		{
+			// O carro repõe a posição anterior e para
+			carX = oldX;
+			carZ = oldZ;
+			carVelocity = 0.0f;
+			carAcceleration = 0.0f;
+			updateCarAABB();
+
+			// Empurra ligeiramente o cheerio para longe do carro
+			float dx = c.x - carX;
+			float dz = c.z - carZ;
+			float len = sqrtf(dx * dx + dz * dz);
+			if (len > 0.0001f) { dx /= len; dz /= len; } // normalização do vetor de deslocamento
+			env.nudgeCheerio(c.id, dx * CHEERIO_PUSH, dz * CHEERIO_PUSH);
+
+			return;
+		}
+	}
+
+	// BUTTERS 
+	for (const auto& b : butters)
+	{
+		if (boxesOverlap(carAABB, b.box))
+		{
+			carX = oldX;
+			carZ = oldZ;
+			carVelocity = 0.0f;
+			carAcceleration = -10.0f;
+			updateCarAABB();
+
+			env.hitButter(b.id);
+			return;
+		}
+	}
+
+	// ORANGES
+	for (const auto& o : oranges)
+	{
+		if (o.active && boxesOverlap(carAABB, o.box))
+		{
+			// TODO: perder a corrida -> repor o carro na linha de partida
+			//       (env.getFinishLinePosx() e env.getFinishLinePosz() já existem para isso)
+		}
+	}
+}
+
 void updateCar(float dt)
 {
 	// ------------------------------------------------------------
@@ -508,11 +568,14 @@ void updateCar(float dt)
 
 	// ------------------------------------------------------------
 	// UPDATE POSITION
+	float oldX = carX;
+	float oldZ = carZ;
 
 	carX += carDirection[0] * carVelocity * dt;
 	carZ += carDirection[2] * carVelocity * dt;
 
 	updateCarAABB();
+	handleCollisions(oldX, oldZ);
 }
 
 
@@ -1127,9 +1190,8 @@ void renderSim(void)
 	{
 		glDisable(GL_DEPTH_TEST);
 		TextCommand textCmd = {paused ? std::string("PAUSED\nPress P to resume")
-									  : std::string("AVTM 2026 Welcome:\nGood Luck!"),
-							   {100, 100},
-							   0.5};
+									  : std::string("AVTM Racing 2026!"),
+							   {100, 100}, 0.5};
 		// the glyph contains transparent background colors and non-transparent for the actual character pixels. So we use the blending
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
