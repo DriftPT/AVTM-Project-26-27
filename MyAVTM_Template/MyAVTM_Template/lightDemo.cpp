@@ -239,13 +239,12 @@ float carAcceleration = 0.0f;
 float carDirection[3] = {0.0f, 0.0f, 1.0f};
 
 // Movement values
-const float ACCELERATION = 3.0f;
-const float DECELERATION = 2.0f;
+const float ACCELERATION = 6.0f;
+const float DECELERATION = 4.0f;
 
 const float TURN_SPEED = 75.0f; // degrees per second
 
-const float MAX_FORWARD_SPEED = 15.0f;
-const float MAX_BACKWARD_SPEED = -10.0f;
+const float MAX_SPEED = 25.0f;
 
 // Used to calculate the time between frames
 int lastUpdateTime = 0;
@@ -286,19 +285,13 @@ struct CarMaterial
 
 // Car body - blue
 CarMaterial bodyMaterial = {
-	{0.02f, 0.05f, 0.15f, 1.0f},
-	{0.02f, 0.30f, 0.80f, 1.0f},
-	{0.60f, 0.70f, 0.90f, 1.0f},
-	70.0f};
+	{ 0.02f, 0.05f, 0.15f, 1.0f },
+	{ 0.02f, 0.30f, 0.80f, 1.0f },
+	{ 0.60f, 0.70f, 0.90f, 1.0f },
+	70.0f
+};
 
-// Wheels - matte black
-CarMaterial wheelMaterial = {
-	{0.05f, 0.05f, 0.05f, 1.0f},
-	{0.12f, 0.12f, 0.13f, 1.0f},
-	{0.10f, 0.10f, 0.10f, 1.0f},
-	8.0f};
-
-// Headlights - white/blue
+// Headlights - blueish white
 CarMaterial headlightMaterial = {
 	{0.12f, 0.14f, 0.18f, 1.0f},
 	{0.75f, 0.85f, 1.00f, 1.0f},
@@ -307,24 +300,37 @@ CarMaterial headlightMaterial = {
 
 // RearLights - red
 CarMaterial rearLightMaterial = {
-	{0.20f, 0.00f, 0.00f, 1.0f},
-	{0.90f, 0.05f, 0.05f, 1.0f},
-	{0.80f, 0.30f, 0.30f, 1.0f},
-	50.0f};
+	{ 0.20f, 0.00f, 0.00f, 1.0f },
+	{ 0.90f, 0.05f, 0.05f, 1.0f },
+	{ 0.80f, 0.30f, 0.30f, 1.0f },
+	50.0f
+};
 
-// Exhaust - metallic grey
-CarMaterial exhaustMaterial = {
-	{0.10f, 0.10f, 0.10f, 1.0f},
-	{0.42f, 0.44f, 0.48f, 1.0f},
-	{0.85f, 0.85f, 0.88f, 1.0f},
-	80.0f};
+// Dark color
+CarMaterial darkMaterial = {
+	{ 0.03f, 0.03f, 0.03f, 1.0f },
+	{ 0.12f, 0.12f, 0.12f, 1.0f },
+	{ 0.20f, 0.20f, 0.20f, 1.0f },
+	20.0f
+};
 
-// Windshield and windows
-CarMaterial darkGlassMaterial = {
-	{0.02f, 0.04f, 0.06f, 1.0f},
-	{0.08f, 0.16f, 0.22f, 1.0f},
-	{0.70f, 0.80f, 0.90f, 1.0f},
-	90.0f};
+
+// Windshield and windows - light blue transparent glass
+CarMaterial glassMaterial = {
+	{ 0.05f, 0.10f, 0.12f, 1.0f },
+	{ 0.35f, 0.70f, 0.80f, 0.35f },
+	{ 0.85f, 0.95f, 1.00f, 1.0f },
+	90.0f
+};
+
+// Bounding box debug material - red
+CarMaterial boundingBoxMaterial = {
+	{ 0.3f, 0.0f, 0.0f, 1.0f },
+	{ 1.0f, 0.0f, 0.0f, 1.0f },
+	{ 1.0f, 0.0f, 0.0f, 1.0f },
+	10.0f
+};
+bool showCarAABB = true;
 
 void setMeshMaterial(int meshID, const CarMaterial &material)
 {
@@ -464,11 +470,11 @@ void updateCar(float dt)
 	// ------------------------------------------------------------
 	// LIMIT MAXIMUM SPEED
 
-	if (carVelocity > MAX_FORWARD_SPEED)
-		carVelocity = MAX_FORWARD_SPEED;
+	if (carVelocity > MAX_SPEED)
+		carVelocity = MAX_SPEED;
 
-	if (carVelocity < MAX_BACKWARD_SPEED)
-		carVelocity = MAX_BACKWARD_SPEED;
+	if (carVelocity < -MAX_SPEED)
+		carVelocity = -MAX_SPEED;
 
 	// ------------------------------------------------------------
 	// STEERING
@@ -507,6 +513,75 @@ void updateCar(float dt)
 	updateCarAABB();
 }
 
+
+void drawCabin()
+{
+	// ROOF
+	mu.pushMatrix(gmu::MODEL);
+	mu.translate(gmu::MODEL, 0.0f, 1.75f, -0.4f);
+	mu.scale(gmu::MODEL, 2.4f, 0.2f, 2.4f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+	setMeshMaterial(MESH_CUBE, bodyMaterial);
+	drawMesh(MESH_CUBE);
+	mu.popMatrix(gmu::MODEL);
+
+	// FRONT RIGHT PILLAR
+	mu.pushMatrix(gmu::MODEL);
+	mu.translate(gmu::MODEL, -1.1f, 1.5f, 0.7f);
+	mu.scale(gmu::MODEL, 0.2f, 0.70f, 0.20f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+	setMeshMaterial(MESH_CUBE, bodyMaterial);
+	drawMesh(MESH_CUBE);
+	mu.popMatrix(gmu::MODEL);
+
+	// FRONT LEFT PILLAR
+	mu.pushMatrix(gmu::MODEL);
+	mu.translate(gmu::MODEL, 1.1f, 1.5f, 0.7f);
+	mu.scale(gmu::MODEL, 0.2f, 0.70f, 0.20f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+	setMeshMaterial(MESH_CUBE, bodyMaterial);
+	drawMesh(MESH_CUBE);
+	mu.popMatrix(gmu::MODEL);
+
+	// REAR RIGHT PILLAR
+	mu.pushMatrix(gmu::MODEL);
+	mu.translate(gmu::MODEL, -1.1f, 1.5f, -1.5f);
+	mu.scale(gmu::MODEL, 0.2f, 0.70f, 0.20f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+	setMeshMaterial(MESH_CUBE, bodyMaterial);
+	drawMesh(MESH_CUBE);
+	mu.popMatrix(gmu::MODEL);
+
+	// REAR LEFT PILLAR
+	mu.pushMatrix(gmu::MODEL);
+	mu.translate(gmu::MODEL, 1.1f, 1.5f, -1.50f);
+	mu.scale(gmu::MODEL, 0.2f, 0.70f, 0.20f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+	setMeshMaterial(MESH_CUBE, bodyMaterial);
+	drawMesh(MESH_CUBE);
+	mu.popMatrix(gmu::MODEL);
+
+	// LEFT CENTRE PILLAR
+	mu.pushMatrix(gmu::MODEL);
+	mu.translate(gmu::MODEL, 1.1f, 1.5f, -0.4f);
+	mu.scale(gmu::MODEL, 0.20f, 0.70f, 0.20f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+	setMeshMaterial(MESH_CUBE, bodyMaterial);
+	drawMesh(MESH_CUBE);
+	mu.popMatrix(gmu::MODEL);
+
+	// RIGHT CENTRE PILLAR
+	mu.pushMatrix(gmu::MODEL);
+	mu.translate(gmu::MODEL, -1.1f, 1.5f, -0.4f);
+	mu.scale(gmu::MODEL, 0.20f, 0.70f, 0.20f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+	setMeshMaterial(MESH_CUBE, bodyMaterial);
+	drawMesh(MESH_CUBE);
+	mu.popMatrix(gmu::MODEL);
+}
+
+
+
 void drawWheel(float x, float y, float z)
 {
 	mu.pushMatrix(gmu::MODEL);
@@ -519,7 +594,7 @@ void drawWheel(float x, float y, float z)
 
 	mu.scale(gmu::MODEL, 0.33f, 0.33f, 0.33f);
 	renderer.setTexUnit(0, 7);
-	setMeshMaterial(MESH_TORUS, wheelMaterial);
+	setMeshMaterial(MESH_TORUS, darkMaterial);
 	drawMesh(MESH_TORUS, 2);
 
 	mu.popMatrix(gmu::MODEL);
@@ -528,7 +603,7 @@ void drawWheel(float x, float y, float z)
 	mu.pushMatrix(gmu::MODEL);
 
 	mu.scale(gmu::MODEL, 0.4f, 0.12f, 0.4f);
-	setMeshMaterial(MESH_CYLINDER, wheelMaterial);
+	setMeshMaterial(MESH_CYLINDER, darkMaterial);
 	drawMesh(MESH_CYLINDER);
 
 	mu.popMatrix(gmu::MODEL);
@@ -540,11 +615,11 @@ void drawSideWindow(float x, float z)
 {
 	mu.pushMatrix(gmu::MODEL);
 
-	mu.translate(gmu::MODEL, x, 1.5f, z);
-	mu.scale(gmu::MODEL, 0.02f, 0.4f, 0.9f);
+	mu.translate(gmu::MODEL, x, 1.4f, z);
+	mu.scale(gmu::MODEL, 0.2f, 0.5f, 0.9f);
 	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
 
-	setMeshMaterial(MESH_CUBE, darkGlassMaterial);
+	setMeshMaterial(MESH_CUBE, glassMaterial);
 	drawMesh(MESH_CUBE);
 
 	mu.popMatrix(gmu::MODEL);
@@ -588,7 +663,22 @@ void drawMirror(float side)
 	mu.scale(gmu::MODEL, 0.2f, 0.1f, 0.05f);
 	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
 
-	setMeshMaterial(MESH_CUBE, darkGlassMaterial);
+	setMeshMaterial(MESH_CUBE, glassMaterial);
+	drawMesh(MESH_CUBE);
+
+	mu.popMatrix(gmu::MODEL);
+}
+
+void drawSeat(float x, float z)
+{
+	mu.pushMatrix(gmu::MODEL);
+
+	// Backrest
+	mu.translate(gmu::MODEL, x, 1.35f, z);
+	mu.scale(gmu::MODEL, 0.65f, 0.40f, 0.20f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+
+	setMeshMaterial(MESH_CUBE, darkMaterial);
 	drawMesh(MESH_CUBE);
 
 	mu.popMatrix(gmu::MODEL);
@@ -627,17 +717,7 @@ void drawCar()
 	// ------------------------------------------------------------
 	// CABIN
 
-	mu.pushMatrix(gmu::MODEL);
-
-	// Slightly towards the rear of the car
-	mu.translate(gmu::MODEL, 0.0f, 1.5f, -0.4f);
-	mu.scale(gmu::MODEL, 2.4f, 0.7f, 2.4f);
-	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
-
-	setMeshMaterial(MESH_CUBE, bodyMaterial);
-	drawMesh(MESH_CUBE);
-
-	mu.popMatrix(gmu::MODEL);
+	drawCabin();
 
 	// ------------------------------------------------------------
 	// HOOD RAISED
@@ -654,15 +734,38 @@ void drawCar()
 	mu.popMatrix(gmu::MODEL);
 
 	// ------------------------------------------------------------
+	// SEATS and STEERING WHEEL
+	
+	// Front seats
+	drawSeat(-0.55f, -0.2f);
+	drawSeat(0.55f, -0.2f);
+
+	// Rear seats
+	drawSeat(-0.55f, -1.3f);
+	drawSeat(0.55f, -1.3f);
+
+	// steering wheel
+	mu.pushMatrix(gmu::MODEL);
+	mu.translate(gmu::MODEL, 0.55f, 1.2f, 0.50f);
+	mu.rotate(gmu::MODEL, 90.0f, 1.0f, 0.0f, 0.0f);
+	mu.scale(gmu::MODEL, 0.15f, 0.15f, 0.15f);
+	setMeshMaterial(MESH_TORUS, darkMaterial);
+	drawMesh(MESH_TORUS);
+	mu.popMatrix(gmu::MODEL);
+
+	// ------------------------------------------------------------
 	// FRONT WINDSHIELD
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	mu.pushMatrix(gmu::MODEL);
 
-	mu.translate(gmu::MODEL, 0.0f, 1.5f, 0.81f);
-	mu.scale(gmu::MODEL, 1.9f, 0.5f, 0.02f);
+	mu.translate(gmu::MODEL, 0.0f, 1.4f, 0.7f);
+	mu.scale(gmu::MODEL, 2.0f, 0.5f, 0.2f);
 	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
 
-	setMeshMaterial(MESH_CUBE, darkGlassMaterial);
+	setMeshMaterial(MESH_CUBE, glassMaterial);
 	drawMesh(MESH_CUBE);
 
 	mu.popMatrix(gmu::MODEL);
@@ -672,31 +775,34 @@ void drawCar()
 
 	mu.pushMatrix(gmu::MODEL);
 
-	mu.translate(gmu::MODEL, 0.0f, 1.5f, -1.61f);
-	mu.scale(gmu::MODEL, 1.7f, 0.4f, 0.02f);
+	mu.translate(gmu::MODEL, 0.0f, 1.4f, -1.5f);
+	mu.scale(gmu::MODEL, 2.0f, 0.5f, 0.2f);
 	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
 
-	setMeshMaterial(MESH_CUBE, darkGlassMaterial);
+	setMeshMaterial(MESH_CUBE, glassMaterial);
 	drawMesh(MESH_CUBE);
 
 	mu.popMatrix(gmu::MODEL);
+
 
 	// ------------------------------------------------------------
 	// SIDE WINDOWS
 
 	// right windows
-	drawSideWindow(-1.21f, 0.2f);
-	drawSideWindow(-1.21f, -0.9f);
+	drawSideWindow(-1.1f, 0.15f);
+	drawSideWindow(-1.1f, -0.95f);
 
 	// left windows
-	drawSideWindow(1.21f, 0.2f);
-	drawSideWindow(1.21f, -0.9f);
+	drawSideWindow(1.1f, 0.15f);
+	drawSideWindow(1.1f, -0.95f);
 
 	// ------------------------------------------------------------
 	// MIRRORS
 
-	drawMirror(-1.0f); // Right mirror
-	drawMirror(1.0f);  // Left mirror
+	drawMirror(-1.0f);  // Right mirror
+	drawMirror(1.0f);   // Left mirror
+
+	glDisable(GL_BLEND);
 
 	// ------------------------------------------------------------
 	// WHEELS
@@ -729,7 +835,7 @@ void drawCar()
 	mu.scale(gmu::MODEL, 3.31f, 0.1f, 0.5f);
 	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
 
-	setMeshMaterial(MESH_CUBE, darkGlassMaterial);
+	setMeshMaterial(MESH_CUBE, darkMaterial);
 	drawMesh(MESH_CUBE);
 
 	mu.popMatrix(gmu::MODEL);
@@ -742,7 +848,7 @@ void drawCar()
 	mu.translate(gmu::MODEL, 0.0f, 0.75f, 2.70f);
 	mu.scale(gmu::MODEL, 0.8f, 0.25f, 0.02f);
 	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
-	renderer.setTexUnit(0, 9);
+	renderer.setTexUnit(0, 8);
 	drawMesh(MESH_CUBE, 2);
 
 	mu.popMatrix(gmu::MODEL);
@@ -776,9 +882,7 @@ void drawCar()
 	mu.popMatrix(gmu::MODEL);
 
 	// ------------------------------------------------------------
-	// EXHAUSTS
-
-	renderer.setTexUnit(2, 8);
+	// EXHAUSTS 
 
 	// Left Exhaust
 	mu.pushMatrix(gmu::MODEL);
@@ -787,8 +891,8 @@ void drawCar()
 	mu.rotate(gmu::MODEL, 90.0f, 1.0f, 0.0f, 0.0f); // Rotate it so its axis points towards the rear.
 	mu.scale(gmu::MODEL, 0.20f, 0.20f, 0.20f);
 
-	setMeshMaterial(MESH_CYLINDER, exhaustMaterial);
-	drawMesh(MESH_CYLINDER, 1);
+	setMeshMaterial(MESH_CYLINDER, darkMaterial);
+	drawMesh(MESH_CYLINDER);
 
 	mu.popMatrix(gmu::MODEL);
 
@@ -799,8 +903,8 @@ void drawCar()
 	mu.rotate(gmu::MODEL, 90.0f, 1.0f, 0.0f, 0.0f);
 	mu.scale(gmu::MODEL, 0.20f, 0.20f, 0.20f);
 
-	setMeshMaterial(MESH_CYLINDER, exhaustMaterial);
-	drawMesh(MESH_CYLINDER, 1);
+	setMeshMaterial(MESH_CYLINDER, darkMaterial);
+	drawMesh(MESH_CYLINDER);
 
 	mu.popMatrix(gmu::MODEL);
 
@@ -857,7 +961,7 @@ void drawCar()
 	mu.translate(gmu::MODEL, 0.0f, 0.8f, -2.70f);
 	mu.scale(gmu::MODEL, 0.85f, 0.30f, 0.01f);
 	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
-	renderer.setTexUnit(0, 9);
+	renderer.setTexUnit(0, 8);
 	drawMesh(MESH_CUBE, 2);
 
 	mu.popMatrix(gmu::MODEL);
@@ -909,6 +1013,45 @@ void drawCar()
 
 	mu.popMatrix(gmu::MODEL);
 }
+
+
+void drawCarAABB()
+{
+	if (!showCarAABB)
+		return;
+
+	// Calculate box dimensions
+	float sizeX = carAABB.maxX - carAABB.minX;
+	float sizeY = carAABB.maxY - carAABB.minY;
+	float sizeZ = carAABB.maxZ - carAABB.minZ;
+
+	// Calculate box centre
+	float centerX = (carAABB.minX + carAABB.maxX) * 0.5f;
+	float centerY = (carAABB.minY + carAABB.maxY) * 0.5f;
+	float centerZ = (carAABB.minZ + carAABB.maxZ) * 0.5f;
+
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, centerX, centerY, centerZ);
+
+	mu.scale(gmu::MODEL, sizeX, sizeY, sizeZ);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+
+	setMeshMaterial(MESH_CUBE, boundingBoxMaterial);
+	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE); // Draw only the edges
+
+	glDisable(GL_CULL_FACE); // So we can see all cube faces/edges
+
+	drawMesh(MESH_CUBE);
+
+	// Restore normal rendering
+	glEnable(GL_CULL_FACE);
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+	mu.popMatrix(gmu::MODEL);
+}
+
+
 
 // ------------------------------------------------------------
 //
@@ -972,6 +1115,7 @@ void renderSim(void)
 	env.render(renderer, mu);
 	// Draw the car
 	drawCar();
+	drawCarAABB();
 
 	// Render text (bitmap fonts) in screen coordinates. So use ortoghonal projection with viewport coordinates.
 	// Each glyph quad texture needs just one byte color channel: 0 in background and 1 for the actual character pixels. Use it for alpha blending
@@ -1256,13 +1400,12 @@ void buildScene()
 	renderer.TexObjArray.texture2D_Loader("assets/lightwood.tga"); // 2
 
 	// Minhas texturas (3, 4, 5, 6)
-	renderer.TexObjArray.texture2D_Loader("assets/table.jpg");		   // 3
-	renderer.TexObjArray.texture2D_Loader("assets/road.jpg");		   // 4
-	renderer.TexObjArray.texture2D_Loader("assets/finishline.jpg");	   // 5
-	renderer.TexObjArray.texture2D_Loader("assets/orange.jpg");		   // 6
-	renderer.TexObjArray.texture2D_Loader("assets/tire.png");		   // 7
-	renderer.TexObjArray.texture2D_Loader("assets/exhaust_metal.png"); // 8
-	renderer.TexObjArray.texture2D_Loader("assets/license.png");	   // 9
+	renderer.TexObjArray.texture2D_Loader("assets/table.jpg");       // 3
+	renderer.TexObjArray.texture2D_Loader("assets/road.jpg");        // 4
+	renderer.TexObjArray.texture2D_Loader("assets/finishline.jpg");  // 5
+	renderer.TexObjArray.texture2D_Loader("assets/orange.jpg");      // 6
+	renderer.TexObjArray.texture2D_Loader("assets/tire.png");        // 7
+	renderer.TexObjArray.texture2D_Loader("assets/license.png");     // 8
 
 	// Scene geometry with triangle meshes
 

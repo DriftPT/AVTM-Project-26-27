@@ -66,22 +66,22 @@ void main() {
 	}
 
 	if(texMode == 0) //no texturing
-		colorOut = vec4(max(intensity * mat.diffuse + spec, mat.ambient).rgb, 1.0);
+		colorOut = vec4(max(intensity * mat.diffuse + spec, mat.ambient).rgb, mat.diffuse.a);
 
 	else if(texMode == 1) // modulate diffuse color with texel color
 	{
 		texel = texture(texmap2, DataIn.tex_coord);  // texel from lighwood.tga
-		colorOut = vec4(max(intensity * mat.diffuse * texel + spec,0.07 * texel).rgb, 1.0);
+		colorOut = vec4(max(intensity * mat.diffuse * texel + spec,0.07 * texel).rgb, mat.diffuse.a);
 	}
 	else if (texMode == 2) // diffuse color is replaced by texel color
 	{
 		texel = texture(texmap, DataIn.tex_coord);  // texel from stone.tga
-		colorOut = vec4(max(intensity*texel + spec, 0.07*texel).rgb, 1.0);
+		colorOut = vec4(max(intensity*texel + spec, 0.07*texel).rgb, mat.diffuse.a);
 	}
 	else // multitexturing
 	{
 		texel = texture(texmap2, DataIn.tex_coord);  // texel from lighwood.tga
 		texel1 = texture(texmap1, DataIn.tex_coord);  // texel from checker.tga
-		colorOut = vec4(max(intensity*texel*texel1 + spec, 0.07*texel*texel1).rgb, 1.0);
+		colorOut = vec4(max(intensity*texel*texel1 + spec, 0.07*texel*texel1).rgb, mat.diffuse.a);
 	}
 }
