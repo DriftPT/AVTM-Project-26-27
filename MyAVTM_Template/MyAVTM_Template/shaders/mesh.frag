@@ -42,10 +42,18 @@ uniform vec4 candlesLightPos0, candlesLightPos1, candlesLightPos2, candlesLightP
 out vec4 colorOut;
 
 // Calculate the global illumination
-vec3 calculateGlobalLight(){
+vec3 calculateGlobalLight(vec3 n, vec3 e)
+{
     if (!globalLightOn)
         return vec3(0.0);
-    return mat.diffuse.rgb;
+
+    vec3 l = normalize(globalLightPos.xyz);
+
+    float intensity = max(dot(n, l), 0.0);
+
+    vec3 diffuse = intensity * mat.diffuse.rgb;
+
+    return diffuse;
 }
 
 //Calculate the spotlight illumination
@@ -74,8 +82,12 @@ vec3 calculateSpotLight(vec3 n, vec3 e){
         return vec3(0.0);
 
 	vec3 h = normalize(l + e);
-	intSpec = max(dot(h,n), 0.0);
+	intSpec = max(dot(h, n), 0.0);
 	spec = mat.specular * pow(intSpec, mat.shininess) * att;
+
+	vec3 diffuse = intensity * mat.diffuse.rgb;
+
+	return diffuse + spec.rgb;
 
 }
 
@@ -115,7 +127,7 @@ void main() {
 	vec3 e = normalize(DataIn.eye);
 
 	//Global Light
-	vec3 globalLight = calculateGlobalLight();
+	vec3 globalLight = calculateGlobalLight(n, e);
 
 	// Spotlight
 	vec3 spotlight = calculateSpotLight(n, e);

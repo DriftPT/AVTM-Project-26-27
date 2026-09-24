@@ -1275,7 +1275,7 @@ void renderSim(void)
 	}
 	renderer.setCandlesLights(candlesIllumination, candlesEye);
 
-	drawCandleMarkers();
+	//drawCandleMarkers();
 
 	// Desenha mesa / estrada / linha de meta / cheerios / manteigas / laranjas
 	env.render(renderer, mu);
