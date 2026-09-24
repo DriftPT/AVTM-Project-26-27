@@ -68,14 +68,18 @@ float r = 45.0f;
 bool orthoProj = false;
 bool perspProj = true;
 
+// Car state
+float carX = 0.0f;
+float carZ = 0.0f;
+float carAngle = 0.0f;
+
+// Top of the floor in the current scene
+float carBaseY = env.getRoadSurfaceY();
+
 // Auxiliary variables
 bool fixedCamera = false;
 bool trackingCamera = false;
 float cameraOrientation = 0.0f;
-
-// Car Position and Rotation
-float carPosX, carPosY, carPosZ;
-float carRotX, carRotY, carRotZ;
 
 // Mouse Tracking Variables
 int startX, startY, tracking = 0;
@@ -193,14 +197,14 @@ void static setCameraOver()
 
 void static setCameraBehind()
 {
-	alpha = 270.0f + carRotY + cameraOrientation;
+	alpha = 180.0f + carAngle + cameraOrientation;
 	_beta = 20.0f; // Behind Camera Spherical Coordinates - alpha horizontal rotation - beta vertical rotation
 	r = 45.0f;
-	camX = carPosX + r * sin(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
-	camZ = carPosZ + r * cos(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
-	camY = carPosY + r * sin(_beta * 3.14f / 180.0f);
+	camX = carX + r * sin(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
+	camZ = carZ + r * cos(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
+	camY = carBaseY + r * sin(_beta * 3.14f / 180.0f);
 
-	mu.lookAt(camX, camY, camZ, carPosX, carPosY, carPosZ, 0, 1, 0); // the sum of the car postion makes the camera follow it
+	mu.lookAt(camX, camY, camZ, carX, carBaseY, carZ, 0, 1, 0); // the sum of the car postion makes the camera follow it
 }
 
 
@@ -213,17 +217,6 @@ void static setCameraBehind()
 #define MESH_CYLINDER  3
 #define MESH_CONE      4
 #define MESH_TORUS     5
-
-// ------------------------------------------------------------
-// Car state
-// For now the car does not move
-
-float carX = 0.0f;
-float carZ = 0.0f;
-float carAngle = 0.0f;
-
-// Top of the floor in the current scene
-float carBaseY = env.getRoadSurfaceY();
 
 // ------------------------------------------------------------
 // Car keyboard state
