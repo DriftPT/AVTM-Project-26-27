@@ -138,7 +138,7 @@ Assimp::Importer importer;
 const aiScene* scene;
 
 // scale factor for the Assimp model to fit in the window
-float scaleFactor = 100.0;
+float scaleFactor = 1.0;
 
 // by default if there is a normal map then bump effect is implemented. press key "b" to enable/disable normal mapping 
 bool normalMapKey = TRUE;
@@ -1361,13 +1361,10 @@ void renderSim(void)
 			mu.pushMatrix(gmu::MODEL);
 
 			mu.multMatrix(gmu::MODEL, renderer.myMeshes[n].transform);
-
-			mu.scale(
-				gmu::MODEL,
-				scaleFactor,
-				scaleFactor,
-				scaleFactor
-			);
+			mu.translate(gmu::MODEL, carX, carBaseY, carZ);
+			mu.rotate(gmu::MODEL, -90.0f, 1.0f, 0.0f, 0.0f);
+			mu.rotate(gmu::MODEL, carAngle, 0.0f, 0.0f, 1.0f);
+			mu.scale(gmu::MODEL,scaleFactor*10,scaleFactor*10,scaleFactor*10);
 
 			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
 			mu.computeNormalMatrix3x3();
