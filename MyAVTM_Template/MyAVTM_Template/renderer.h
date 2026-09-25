@@ -67,6 +67,8 @@ public:
 
   void setSpotLightMode(bool spotLightMode);
 
+  void setFog(bool enabled, float* color, float start, float end);
+
   void setTexUnit(int tuId, int texObjArray_pos);
 
 

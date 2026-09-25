@@ -14,14 +14,14 @@ public:
 
     struct Config {
         // Mesa 
-        float tableWidth = 190.0f;
-		float tableDepth = 160.0f;
+        float tableWidth = 220.0f;
+		float tableDepth = 190.0f;
         float tableHeight = 0.6f;
 
         // Circuito
-        float roadWidth = 17.0f;     // largura de cada bloco de estrada
+        float roadWidth = 25.0f;     // largura de cada bloco de estrada
         float roadHeight = 0.08f;   // espessura da estrada (fica em cima da mesa)
-        float roadScale = 2.2f;     // fator de escala da estrada
+        float roadScale = 3.0f;     // fator de escala da estrada
 
         // Cheerios (margens)
         float cheerioOuterRadius = 0.9f;  // raio exterior do anel

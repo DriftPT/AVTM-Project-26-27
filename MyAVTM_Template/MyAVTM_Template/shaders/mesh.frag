@@ -40,6 +40,12 @@ uniform float spotCosCutOff;
 uniform bool candlesLightOn;
 uniform vec4 candlesLightPos0, candlesLightPos1, candlesLightPos2, candlesLightPos3, candlesLightPos4, candlesLightPos5;
 
+uniform bool fogEnabled;
+uniform vec3 fogColor;
+uniform float fogStart;
+uniform float fogEnd;
+uniform int depthFog;
+
 out vec4 colorOut;
 
 // Calculate the global illumination
@@ -193,4 +199,24 @@ void main() {
 
 	vec3 finalColor = baseColor + globalSpecular; 
 	colorOut = vec4(finalColor, mat.diffuse.a);
+
+	if (fogEnabled) {
+		float dist;
+
+		if (depthFog == 0)
+		{
+			// Plane based
+			dist = abs(DataIn.eye.z);
+		}
+		else
+		{
+			// Range based
+			dist = length(DataIn.eye);
+		}
+
+		float fogFactor = (fogEnd - dist) / (fogEnd - fogStart);
+		fogFactor = clamp(fogFactor, 0.0, 1.0);
+
+		colorOut.rgb = mix(fogColor, colorOut.rgb, fogFactor);
+	}
 }

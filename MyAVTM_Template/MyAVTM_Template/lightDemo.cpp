@@ -128,6 +128,13 @@ float localHeadlights[2][4] = {
 float coneDir[4] = { 0.0f, -0.0f, -1.0f, 0.0f };
 float spotCosCutOff = 0.93;
 
+// Fog
+bool fogEnabled = true;
+void togglefog() { fogEnabled = !fogEnabled; }
+float fogColor[3] = { 0.5f, 0.5f, 0.5f };
+float fogStart = 40.0f;
+float fogEnd = 120.0f;
+
 bool fontLoaded = false;
 
 // ==== ASSIMP Importer ==========
@@ -920,7 +927,7 @@ void drawCar()
 
 	// steering wheel
 	mu.pushMatrix(gmu::MODEL);
-	mu.translate(gmu::MODEL, 0.55f, 1.2f, 0.50f);
+	mu.translate(gmu::MODEL, 0.55f, 1.15f, 0.50f);
 	mu.rotate(gmu::MODEL, 90.0f, 1.0f, 0.0f, 0.0f);
 	mu.scale(gmu::MODEL, 0.15f, 0.15f, 0.15f);
 	setMeshMaterial(MESH_TORUS, darkMaterial);
@@ -1393,6 +1400,9 @@ void renderSim(void)
 
 	drawCandles();
 
+	// Fog settings
+	renderer.setFog(fogEnabled, fogColor, fogStart, fogEnd);
+
 	// Desenha mesa / estrada / linha de meta / cheerios / manteigas / laranjas
 	env.render(renderer, mu);
 	// Draw the car
@@ -1605,6 +1615,11 @@ void processKeys(unsigned char key, int xx, int yy)
 	case 'h':
 		carHeadlights = !carHeadlights;
 		printf("Car Headlights [%d]\n", carHeadlights);
+		break;
+
+	case 'F':
+	case 'f':
+		togglefog();
 		break;
 	case 'O':
 	case 'o':
@@ -1931,7 +1946,7 @@ int main(int argc, char **argv)
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_MULTISAMPLE);
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
 
 	printf("Vendor: %s\n", glGetString(GL_VENDOR));
 	printf("Renderer: %s\n", glGetString(GL_RENDERER));
