@@ -58,7 +58,7 @@ public:
 
   void setCandlesLights(bool on, float candlesPos[6][4]);
 
-  void setSpotLights(bool on, float spotLightPos[2][4]);
+  void setSpotLights(bool on, float spotLightPos[2][4], float coneDir[4], float cutoff);
 
   void setSpotParam(float *coneDir, float cutOff);
 

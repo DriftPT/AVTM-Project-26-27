@@ -31,9 +31,10 @@ uniform vec4 globalLightPos;
 
 // Spotlight Illumination
 uniform bool spotlight_mode;
+uniform vec4 spotLightPos0;
+uniform vec4 spotLightPos1;
 uniform vec4 coneDir;
 uniform float spotCosCutOff;
-uniform vec4 spotLightPos0, spotLightPos1;
 
 // 6 Candles Lights - Point Lights
 uniform bool candlesLightOn;
@@ -57,7 +58,7 @@ vec3 calculateGlobalLight(vec3 n, vec3 e)
 }
 
 //Calculate the spotlight illumination
-vec3 calculateSpotLight(vec3 n, vec3 e){
+vec3 calculateSpotLight(vec4 lightPos, vec3 spotDirection, vec3 n, vec3 e){
 	vec4 spec = vec4(0.0);
 	float intensity = 0.0f;
 	float intSpec = 0.0f;
@@ -68,11 +69,16 @@ vec3 calculateSpotLight(vec3 n, vec3 e){
 	if (!spotlight_mode) //spotlight on?
 		return vec3(0.0);
 
-	vec3 l = normalize(DataIn.lightDir);
-	vec3 sd = normalize(coneDir.xyz);
+	// Vector from fragment to light
+	vec3 lightVector = lightPos.xyz - DataIn.fragPos;
+    float distanceToLight = length(lightVector);
+
+	// Direction from fragment to light
+	vec3 l = normalize(lightVector);
+	vec3 sd = normalize(spotDirection);
 	
 	float spotCos = dot(-l, sd);
-	if(!(spotCos > spotCosCutOff)) // inside the cone?
+	if(spotCos <= spotCosCutOff) // inside the cone?
 		return vec3(0.0);
 
 	att = pow(spotCos, spotExp);
@@ -81,14 +87,14 @@ vec3 calculateSpotLight(vec3 n, vec3 e){
 	if (intensity <= 0.0)
         return vec3(0.0);
 
+	// Calculate diffuse component
+	vec3 diffuse = intensity * mat.diffuse.rgb;
+
 	vec3 h = normalize(l + e);
 	intSpec = max(dot(h, n), 0.0);
 	spec = mat.specular * pow(intSpec, mat.shininess) * att;
 
-	vec3 diffuse = intensity * mat.diffuse.rgb;
-
 	return diffuse + spec.rgb;
-
 }
 
 // Calculate the candles illumination
@@ -130,7 +136,12 @@ void main() {
 	vec3 globalLight = calculateGlobalLight(n, e);
 
 	// Spotlight
-	vec3 spotlight = calculateSpotLight(n, e);
+	vec3 spotlight = vec3(0.0);
+
+	if (spotlight_mode)	{
+		spotlight += calculateSpotLight(spotLightPos0, coneDir.xyz, n, e);
+		spotlight += calculateSpotLight(spotLightPos1, coneDir.xyz, n, e);
+	}
 
 	// Candle Lights
 	vec3 candleLights = vec3(0.0);

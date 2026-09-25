@@ -252,7 +252,7 @@ void Renderer::setCandlesLights(bool on, float candlesPos[6][4]) {
     }
 }
 
-void Renderer::setSpotLights(bool on, float spotLightPos[2][4]) {
+void Renderer::setSpotLights(bool on, float spotLightPos[2][4], float coneDir[4], float cutoff) {
     GLint loc = glGetUniformLocation(program, "spotlight_mode");
     if (on)
         glUniform1i(loc, 1);
@@ -268,6 +268,12 @@ void Renderer::setSpotLights(bool on, float spotLightPos[2][4]) {
         loc = glGetUniformLocation(program, posNames[i]);
         glUniform4fv(loc, 1, spotLightPos[i]);
     }
+
+	loc = glGetUniformLocation(program, "coneDir");
+	glUniform4fv(loc, 1, coneDir);
+
+	loc = glGetUniformLocation(program, "spotCosCutOff");
+	glUniform1f(loc, cutoff);
 }
 
 void Renderer::setTexUnit(int tuId, int texObjArray_pos) {

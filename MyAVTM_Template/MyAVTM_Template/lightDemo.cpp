@@ -116,14 +116,12 @@ float candles[6][4] = {
 
 // Spotlight
 bool carHeadlights = false;
-float carHeadlightsPos[2][4] = {
-	{ -0.5f, 0.5f, 1.5f, 1.0f },
-	{ 0.5f, 0.5f, 1.5f, 1.0f }
+float localHeadlightsPos[2][4] = {
+	{ -1.0f, 1.0f, 2.8f, 1.0f },
+	{  1.0f, 1.0f, 2.8f, 1.0f }
 };
-
-
-bool spotlight_mode = false;
 float coneDir[4] = { 0.0f, -0.0f, -1.0f, 0.0f };
+float spotCosCutOff = 0.93;
 
 bool fontLoaded = false;
 
@@ -1265,9 +1263,9 @@ void renderSim(void)
 
 	// Spotlight settings in eye coordinates
 	for (int i = 0; i < 2; i++) {
-		mu.multMatrixPoint(gmu::VIEW, carHeadlightsPos[i], carHeadlightsEye[i]);
+		mu.multMatrixPoint(gmu::VIEW, localHeadlightsPos[i], carHeadlightsEye[i]);
 	}
-	renderer.setSpotLights(carHeadlights, carHeadlightsEye);
+	renderer.setSpotLights(carHeadlights, carHeadlightsEye, coneDir, spotCosCutOff);
 
 	// Candles settigs in eye coordinates
 	for (int i = 0; i < 6; i++) {
@@ -1362,19 +1360,6 @@ void processKeys(unsigned char key, int xx, int yy)
 		paused = !paused;
 		printf(paused ? "Game paused\n" : "Game resumed\n");
 		break;
-	case 'l': // toggle spotlight mode
-		if (!spotlight_mode)
-		{
-			spotlight_mode = true;
-			printf("Point light disabled. Spot light enabled\n");
-		}
-		else
-		{
-			spotlight_mode = false;
-			printf("Spot light disabled. Point light enabled\n");
-		}
-		break;
-
 	case 'r': // reset
 		alpha = 57.0f;
 		_beta = 18.0f; // Camera Spherical Coordinates
