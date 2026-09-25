@@ -280,6 +280,9 @@ const int POINTS_CHEERIO_HIT = -10;
 const int POINTS_BUTTER_HIT  = -15;
 const int POINTS_LIFE_LOST   = -100;
 int points = 0;
+int lastScoreChange = 0;
+float scoreChangeTimer = 0.0f;
+const float SCORE_CHANGE_DISPLAY_TIME = 1.5f;
 
 // Evita descontar pontos em todos os frames enquanto o carro está encostado ao obstáculo
 bool wasHittingCheerio = false;
@@ -487,9 +490,16 @@ void resetCarToStart()
     updateCarAABB();
 }
 
+void addPoints(int delta)
+{
+    points += delta;
+    lastScoreChange = delta;
+    scoreChangeTimer = SCORE_CHANGE_DISPLAY_TIME;
+}
+
 void loseLife()
 {
-	points += POINTS_LIFE_LOST;
+	addPoints(POINTS_LIFE_LOST);
     lives--;
     if (lives <= 0){
         lives = 0;
@@ -525,7 +535,7 @@ void handleCollisions(float oldX, float oldZ)
 	// Se o carro colidiu com um cheerio, repõe a posição anterior e para
 	if (cheerioHit){
 		if (!wasHittingCheerio)
-			points += POINTS_CHEERIO_HIT;
+			addPoints(POINTS_CHEERIO_HIT);
 
 		// O carro repõe a posição anterior e para
 		carX = oldX;
@@ -548,7 +558,7 @@ void handleCollisions(float oldX, float oldZ)
 	}
 	if (butterHit){
 		if (!wasHittingButter)
-			points += POINTS_BUTTER_HIT;
+			addPoints(POINTS_BUTTER_HIT);
 
 		carX = oldX;
 		carZ = oldZ;
@@ -1318,6 +1328,7 @@ void renderSim(void)
 	{
 		env.update(dt);
 		updateCar(dt);
+		if (scoreChangeTimer > 0.0f) { scoreChangeTimer -= dt; }
 	}
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1456,6 +1467,9 @@ void renderSim(void)
 		// Pontos (logo abaixo das vidas)
 		std::ostringstream pointsStream;
 		pointsStream << "Score: " << points;
+		if (scoreChangeTimer > 0.0f) {
+			pointsStream << "  (" << (lastScoreChange > 0 ? "+" : "") << lastScoreChange << ")";
+		}
 		TextCommand pointsCmd = { pointsStream.str(), {20.0f, WinY - 70.0f}, 0.4f };
 		pointsCmd.pvm = hudPvm;
 		renderer.renderText(pointsCmd);
@@ -1543,6 +1557,8 @@ void processKeys(unsigned char key, int xx, int yy)
 		else if (gameOver) {
 			lives = MAX_LIVES;
 			points = 0;
+			lastScoreChange = 0;
+        	scoreChangeTimer = 0.0f;
 			gameOver = false;
 			resetCarToStart();
 		}
