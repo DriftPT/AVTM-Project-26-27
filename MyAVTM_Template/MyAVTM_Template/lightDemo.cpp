@@ -116,9 +116,9 @@ float candles[6][4] = {
 
 // Spotlight
 bool carHeadlights = false;
-float localHeadlightsPos[2][4] = {
-	{ -1.0f, 1.0f, 2.8f, 1.0f },
-	{  1.0f, 1.0f, 2.8f, 1.0f }
+float localHeadlights[2][4] = {
+		{ -1.0f, 1.0f, 2.71f, 1.0f },
+		{  1.0f, 1.0f, 2.71f, 1.0f }
 };
 float coneDir[4] = { 0.0f, -0.0f, -1.0f, 0.0f };
 float spotCosCutOff = 0.93;
@@ -1187,6 +1187,38 @@ void drawCandleMarkers() {
 	}
 }
 
+void updateCarHeadlights(float headlightsWorld[2][4], float coneDirWorld[4])
+{
+	float angleRad = carAngle * 3.14159265f / 180.0f;
+
+	float s = sin(angleRad);
+	float c = cos(angleRad);
+
+	for (int i = 0; i < 2; i++)
+	{
+		// Aplicar escala do carro
+		float localX = localHeadlights[i][0] * CAR_SCALE;
+		float localY = localHeadlights[i][1] * CAR_SCALE;
+		float localZ = localHeadlights[i][2] * CAR_SCALE;
+
+		// Aplicar a mesma rotação Y usada no carro
+		float rotatedX = localX * c + localZ * s;
+		float rotatedZ = -localX * s + localZ * c;
+
+		// Aplicar translação do carro
+		headlightsWorld[i][0] = carX + rotatedX;
+		headlightsWorld[i][1] = carBaseY;
+		headlightsWorld[i][2] = carZ + rotatedZ;
+		headlightsWorld[i][3] = 1.0f;
+	}
+
+	// Direção dos faróis: frente do carro, sem inclinação para baixo
+	coneDirWorld[0] = carDirection[0];
+	coneDirWorld[1] = 0.0f;
+	coneDirWorld[2] = carDirection[2];
+	coneDirWorld[3] = 0.0f;
+}
+
 
 
 // ------------------------------------------------------------
@@ -1254,7 +1286,10 @@ void renderSim(void)
 	// ----------------------------
 
 	float gloablLightPosEye[4];
+	float carHeadlightsWorld[2][4];
 	float carHeadlightsEye[2][4];
+	float coneDirWorld[4];
+	float coneDirEye[4];
 	float candlesEye[6][4];
 
 	// Global Illumination settings in eye coordinates
@@ -1262,10 +1297,14 @@ void renderSim(void)
 	renderer.setGlobalLight(globalIllumination, gloablLightPosEye);
 
 	// Spotlight settings in eye coordinates
+	updateCarHeadlights(carHeadlightsWorld, coneDirWorld);
+
 	for (int i = 0; i < 2; i++) {
-		mu.multMatrixPoint(gmu::VIEW, localHeadlightsPos[i], carHeadlightsEye[i]);
+		mu.multMatrixPoint(gmu::VIEW, carHeadlightsWorld[i], carHeadlightsEye[i]);
 	}
-	renderer.setSpotLights(carHeadlights, carHeadlightsEye, coneDir, spotCosCutOff);
+	mu.multMatrixPoint(gmu::VIEW, coneDirWorld, coneDirEye);
+
+	renderer.setSpotLights(carHeadlights, carHeadlightsEye, coneDirEye, spotCosCutOff);
 
 	// Candles settigs in eye coordinates
 	for (int i = 0; i < 6; i++) {
@@ -1493,13 +1532,25 @@ void processMouseMotion(int xx, int yy)
 	deltaX = -xx + startX;
 	deltaY = yy - startY;
 
+	alphaAux = alpha;
+	betaAux = _beta;
+
 	// left mouse button: move camera
 	if (tracking == 1)
 	{
 
-		alphaAux = alpha + deltaX;
-		betaAux = _beta + deltaY;
-		cameraOrientation += deltaX * 0.1f;
+		if (trackingCamera)
+		{
+			cameraOrientation += deltaX * 0.1f;
+
+			startX = xx;
+			startY = yy;
+
+			return;
+		}
+
+		alphaAux += deltaX;
+		betaAux += deltaY;
 
 		if (betaAux > 85.0f)
 			betaAux = 85.0f;
