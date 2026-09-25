@@ -1346,8 +1346,8 @@ void renderSim(void)
 	// Draw the car
 	if (!objVisible) {
 		drawCar();
-		drawCarAABB();
 	}
+	drawCarAABB();
 
 	// Render text (bitmap fonts) in screen coordinates. So use ortoghonal projection with viewport coordinates.
 	// Each glyph quad texture needs just one byte color channel: 0 in background and 1 for the actual character pixels. Use it for alpha blending
@@ -1363,10 +1363,10 @@ void renderSim(void)
 			mu.pushMatrix(gmu::MODEL);
 
 			mu.multMatrix(gmu::MODEL, renderer.myMeshes[n].transform);
-			mu.translate(gmu::MODEL, carX, carBaseY, carZ);
+			mu.translate(gmu::MODEL, carX+1.0f, carBaseY, carZ);
 			mu.rotate(gmu::MODEL, -90.0f, 1.0f, 0.0f, 0.0f);
 			mu.rotate(gmu::MODEL, carAngle, 0.0f, 0.0f, 1.0f);
-			mu.scale(gmu::MODEL,scaleFactor*10,scaleFactor*10,scaleFactor*10);
+			mu.scale(gmu::MODEL,scaleFactor*4.5,scaleFactor*4.5,scaleFactor*4.5);
 
 			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
 			mu.computeNormalMatrix3x3();
