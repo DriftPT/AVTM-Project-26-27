@@ -26,12 +26,17 @@
 
 #include <IL/il.h>
 
+// assimp include files. These three are usually needed.
+#include <assimp/Importer.hpp>	//OO version Header!
+#include <assimp/scene.h>
+
 #include "renderer.h"
 #include "shader.h"
 #include "mathUtility.h"
 #include "model.h"
 #include "texture.h"
 #include "Environment.h"
+#include "meshFromAssimp.h"
 
 using namespace std;
 
@@ -106,12 +111,12 @@ float globalLightPos[4] = { 0.0f, 20.0f, 0.0f, 0.0f };
 
 // 6 Candles Lights Positions - Pontual 
 float candles[6][4] = {
-	{ -40.0f, env.getRoadSurfaceY() + 1.5f, 15.0f, 1.0f },
-	{ -35.0f, env.getRoadSurfaceY() + 1.5f, -30.0f, 1.0f },
-	{ 0.0f, env.getRoadSurfaceY() + 1.5f, -30.0f, 1.0f },
-	{ 40.0f, env.getRoadSurfaceY() + 1.5f, -10.0f, 1.0f },
-	{ 40.0f, env.getRoadSurfaceY() + 1.5f, 28.0f, 1.0f },
-	{ 0.0f, env.getRoadSurfaceY() + 1.5f, 28.0f, 1.0f }
+	{ -40.0f, env.getRoadSurfaceY() + 1.6f, 15.0f, 1.0f },
+	{ -35.0f, env.getRoadSurfaceY() + 1.6f, -30.0f, 1.0f },
+	{ 0.0f, env.getRoadSurfaceY() + 1.6f, -30.0f, 1.0f },
+	{ 40.0f, env.getRoadSurfaceY() + 1.6f, -10.0f, 1.0f },
+	{ 40.0f, env.getRoadSurfaceY() + 1.6f, 28.0f, 1.0f },
+	{ 0.0f, env.getRoadSurfaceY() + 1.6f, 28.0f, 1.0f }
 };
 
 // Spotlight
@@ -124,6 +129,22 @@ float coneDir[4] = { 0.0f, -0.0f, -1.0f, 0.0f };
 float spotCosCutOff = 0.93;
 
 bool fontLoaded = false;
+
+// ==== ASSIMP Importer ==========
+// Create an instance of the Importer class
+Assimp::Importer importer;
+
+// the global Assimp scene object
+const aiScene* scene;
+
+// scale factor for the Assimp model to fit in the window
+float scaleFactor = 100.0;
+
+// by default if there is a normal map then bump effect is implemented. press key "b" to enable/disable normal mapping 
+bool normalMapKey = TRUE;
+
+// .obj Visability
+bool objVisible = false;
 
 /// ::::::::::::::::::::::::::::::::::::::::::::::::CALLBACK FUNCIONS:::::::::::::::::::::::::::::::::::::::::::::::::://///
 
@@ -1330,6 +1351,42 @@ void renderSim(void)
 	// Each glyph quad texture needs just one byte color channel: 0 in background and 1 for the actual character pixels. Use it for alpha blending
 	// text to be rendered in last place to be in front of everything
 
+	dataMesh data;
+
+	if (objVisible)
+	{
+		// draw all meshes for the OBJ
+		for (unsigned int n = 0; n < renderer.myMeshes.size(); ++n) {
+
+			mu.pushMatrix(gmu::MODEL);
+
+			mu.multMatrix(gmu::MODEL, renderer.myMeshes[n].transform);
+
+			mu.scale(
+				gmu::MODEL,
+				scaleFactor,
+				scaleFactor,
+				scaleFactor
+			);
+
+			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+			mu.computeNormalMatrix3x3();
+
+			data.meshID = n;
+			data.texMode = 0;
+			data.model = mu.get(gmu::MODEL);
+			data.view = mu.get(gmu::VIEW);
+			data.vm = mu.get(gmu::VIEW_MODEL);
+			data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+			data.normal = mu.getNormalMatrix();
+			data.normalMapKey = normalMapKey;
+
+			renderer.renderMeshFromAssimp(data);
+
+			mu.popMatrix(gmu::MODEL);
+		}
+	}
+
 	if (fontLoaded)
 	{
 		glDisable(GL_DEPTH_TEST);
@@ -1455,6 +1512,11 @@ void processKeys(unsigned char key, int xx, int yy)
 	case 'h':
 		carHeadlights = !carHeadlights;
 		printf("Car Headlights [%d]\n", carHeadlights);
+		break;
+	case 'O':
+	case 'o':
+		objVisible = !objVisible;
+		printf("OBJ Visibility [%d]\n", objVisible);
 		break;
 	}
 }
@@ -1705,6 +1767,14 @@ void buildScene()
 	CAR_START_X = carX = env.getFinishLinePosx() + 3.0f;
 	CAR_START_Z = carZ = env.getFinishLinePosz();
 	updateCarAABB();
+
+	// Import .obj after all the original meshes
+	std::string filepath = "assets/models/minicooper.obj";
+	//import 3D file into Assimp scene graph
+	if (!Import3DFromFile(filepath, importer, scene, scaleFactor))
+		exit(0);
+	//creation of Mymesh array with VAO Geometry and Material and array of Texture Objs for the model input by the user
+	createMyMeshFromAssimp(scene, &renderer);
 	
 	// The truetypeInit creates a texture object in TexObjArray for storing the fontAtlasTexture
 
