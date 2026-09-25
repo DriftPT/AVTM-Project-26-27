@@ -6,6 +6,7 @@
 #include <cstring>
 #include <cmath>
 #include <string>
+#include <algorithm>
 
 #include <GL/glew.h>
 
@@ -133,7 +134,7 @@ Environment::RoadBlock Environment::makeSegment(float x0, float z0, float x1, fl
     }
     else {
         roadBlock.halfLengthX = halfRoad;
-        roadBlock.halfLengthZ = fabs(z1 - z0) * 0.5f; // como já se tapou na horizontal não é preciso na vertical
+        roadBlock.halfLengthZ = fabs(z1 - z0) * 0.5f - halfRoad; // como já se tapou na horizontal não é preciso na vertical
     }
     return roadBlock;
 }
@@ -270,6 +271,9 @@ void Environment::resetOrange(Orange& orange) {
     orange.dirX = dirX;
     orange.dirZ = dirZ;
     orange.active = true;
+    orange.hopping = false;
+    orange.hopTimer = 0.0f;
+    orange.restY = orange.y;
     orange.updateAABB();
 }
 
@@ -280,9 +284,9 @@ void Environment::update(float deltaTime) {
 
     totalPlayTime += deltaTime;
 
-	// Aumentar a velocidade das laranjas com o tempo com um maximo de 2.5x
+	// Aumentar a velocidade das laranjas com o tempo com um maximo de 3.0x
     float speedMultiplier = 1.0f + totalPlayTime * 0.02f;
-    if (speedMultiplier > 2.5f) speedMultiplier = 2.5f;
+    if (speedMultiplier > 3.0f) speedMultiplier = 3.0f;
     for (auto& orange : oranges) {
         if (!orange.active) continue;
 
@@ -294,7 +298,6 @@ void Environment::update(float deltaTime) {
         // Movimento retilíneo
         orange.x += orange.vx * deltaTime;
         orange.z += orange.vz * deltaTime;
-        orange.updateAABB();
 
 		// Atualizar o ângulo de rotação com base na velocidade linear e no raio da laranja
         float angularSpeedRad = orange.speed / orange.radius;                   // ω = v / r
@@ -308,7 +311,10 @@ void Environment::update(float deltaTime) {
         if (fabs(orange.x) > limitX || fabs(orange.z) > limitZ) {
             resetOrange(orange);
         }
+        updateOrangeHop(orange, deltaTime);
+        orange.updateAABB();
     }
+    resolveOrangeCollisions();
 
     for (auto& b : butters) {
         if (b.shakeTimer > 0.0f) {
@@ -566,10 +572,10 @@ void Environment::drawOranges(Renderer& renderer, gmu& mu) {
         mu.popMatrix(gmu::MODEL);
     }
 }
-// ------------------------ Extras ------------------------
 
-//TODO: REVER
-void Environment::drawBox(Renderer& renderer, gmu& mu, const AABB& b) {
+// ------------------------ Bounding Boxes and Collisions ------------------------
+
+void Environment::drawBox(Renderer& renderer, gmu& mu, const AABB& b) {//TODO: Remover
     dataMesh data;
     data.meshID = 0;   // cubo
     data.texMode = 0;  // só material
@@ -589,7 +595,7 @@ void Environment::drawBox(Renderer& renderer, gmu& mu, const AABB& b) {
     mu.popMatrix(gmu::MODEL);
 }
 
-void Environment::drawBoundingBoxes(Renderer& renderer, gmu& mu) {
+void Environment::drawBoundingBoxes(Renderer& renderer, gmu& mu) {//TODO: Remover
     // Verde puro: com diffuse/specular a 0, o shader devolve o ambient
     float amb[]  = { 0.0f, 1.0f, 0.0f, 1.0f };
     float zero[] = { 0.0f, 0.0f, 0.0f, 1.0f };
@@ -624,4 +630,139 @@ void Environment::hitButter(int id) {
 void Environment::hitOrange(int id) {
     if (id < 0 || id >= (int)oranges.size()) return;
     resetOrange(oranges[id]);
+}
+
+void Environment::checkOrangeCheerioHop(Orange& orange) {
+    for (const auto& c : cheerios) {
+        if (checkOverlap(orange.box, c.box)) {
+            float hopDistance = c.halfXZ * 2.0f; // largura do cheerio a atravessar
+
+            orange.hopping    = true;
+            orange.hopTimer   = 0.0f;
+            orange.hopHeight  = c.halfY * 2.0f;              // altura total do cheerio
+            orange.hopDuration = hopDistance / orange.speed; // quanto mais rápida, mais curto o salto
+            return; // um cheerio já chega para desencadear o salto
+        }
+    }
+}
+
+void Environment::updateOrangeHop(Orange& orange, float deltaTime) {
+    if (!orange.hopping) {
+        checkOrangeCheerioHop(orange);
+        return;
+    }
+    // Verificar se o salto terminou de acordo com o tempo decorrido
+    orange.hopTimer += deltaTime;
+    float t = orange.hopTimer / orange.hopDuration;
+    if (t >= 1.0f) {
+        orange.hopping = false;
+        orange.y = orange.restY;
+    } else {
+        orange.y = orange.restY + sinf(t * 3.14159f) * orange.hopHeight; // função seno para criar o arco do salto
+    }
+}
+
+//TODO: REVER
+// Resolve a colisão de uma laranja contra qualquer obstáculo AABB
+void Environment::resolveOrangeCollision(Orange& orange, const AABB& box) {
+
+    // Calcular sobreposição em cada um dos 4 lados no plano XZ
+    float overlapLeft   = orange.box.maxX - box.minX; // penetração pela esquerda
+    float overlapRight  = box.maxX - orange.box.minX; // penetração pela direita
+    float overlapBack   = orange.box.maxZ - box.minZ;
+    float overlapFront  = box.maxZ - orange.box.minZ;
+
+    float minOverlap = std::min({overlapLeft, overlapRight, overlapBack, overlapFront});
+    float nx = 0.0f, nz = 0.0f;
+
+    // Determina a normal da face por onde colidiu e empurra
+    if (minOverlap == overlapLeft) {
+        nx = -1.0f;
+        orange.x -= minOverlap;
+    } else if (minOverlap == overlapRight) {
+        nx = 1.0f;
+        orange.x += minOverlap;
+    } else if (minOverlap == overlapBack) {
+        nz = -1.0f;
+        orange.z -= minOverlap;
+    } else {
+        nz = 1.0f;
+        orange.z += minOverlap;
+    }
+
+    // Reflete o vetor diretor da laranja segundo a normal: d = d - 2*(d . n)*n
+    float dot = orange.dirX * nx + orange.dirZ * nz;
+    orange.dirX -= 2.0f * dot * nx;
+    orange.dirZ -= 2.0f * dot * nz;
+
+    orange.updateAABB();
+    return;
+}
+
+// Resolve a colisão entre duas laranjas
+void Environment::resolveOrangeOrangeCollision(Orange& a, Orange& b) {
+    float dx = b.x - a.x;
+    float dz = b.z - a.z;
+    float distSq = dx * dx + dz * dz;
+    float minDist = a.radius + b.radius;
+
+    float dist = sqrtf(distSq);
+    float nx = 1.0f, nz = 0.0f; // Direção padrão caso estejam exatamente no mesmo ponto
+
+    if (dist > 0.0001f) {
+        nx = dx / dist;
+        nz = dz / dist;
+    }
+
+    // Separação mútua: afasta cada laranja em metade da penetração
+    float penetration = minDist - dist;
+    a.x -= nx * penetration * 0.5f;
+    a.z -= nz * penetration * 0.5f;
+    b.x += nx * penetration * 0.5f;
+    b.z += nz * penetration * 0.5f;
+
+    // Reflexão elástica das direções em torno da normal de colisão
+    // Laranja A reflete em 'n'
+    float dotA = a.dirX * nx + a.dirZ * nz;
+    a.dirX -= 2.0f * dotA * nx;
+    a.dirZ -= 2.0f * dotA * nz;
+
+    // Laranja B reflete em '-n' (a normal oposta)
+    float dotB = b.dirX * (-nx) + b.dirZ * (-nz);
+    b.dirX -= 2.0f * dotB * (-nx);
+    b.dirZ -= 2.0f * dotB * (-nz);
+
+    // Renormalizar os vetores diretores
+    float lenA = sqrtf(a.dirX * a.dirX + a.dirZ * a.dirZ);
+    if (lenA > 0.0001f) { a.dirX /= lenA; a.dirZ /= lenA; }
+
+    float lenB = sqrtf(b.dirX * b.dirX + b.dirZ * b.dirZ);
+    if (lenB > 0.0001f) { b.dirX /= lenB; b.dirZ /= lenB; }
+
+    // Atualizar as caixas AABB de ambas após o reposicionamento
+    a.updateAABB();
+    b.updateAABB();
+}
+
+// Resolve as colisões das laranjas em geral
+void Environment::resolveOrangeCollisions() {
+    // Laranjas contra Manteigas
+    for (auto& orange : oranges) {
+        if (!orange.active) continue;
+        for (const auto& butter : butters) {
+            if (!checkOverlap(orange.box, butter.box)) continue;
+            resolveOrangeCollision(orange, butter.box);
+        }
+    }
+
+    // Laranjas contra Laranjas 
+    for (size_t i = 0; i < oranges.size(); ++i) {
+        if (!oranges[i].active) continue;
+        for (size_t j = i + 1; j < oranges.size(); ++j) {
+            if (!oranges[j].active || !checkOverlap(oranges[i].box, oranges[j].box)) continue;
+
+            // Caso haja colisão
+            resolveOrangeOrangeCollision(oranges[i], oranges[j]);
+        }
+    }
 }

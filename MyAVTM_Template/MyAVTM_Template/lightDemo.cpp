@@ -267,13 +267,21 @@ void static setCameraBehind()
 #define MESH_TORUS 5
 
 // ------------------------------------------------------------
+// Gameplay
+
+const int MAX_LIVES = 5;
+int lives = MAX_LIVES;
+bool gameOver = false;
+bool paused = false;
+bool gameStarted = false;
+
+// ------------------------------------------------------------
 // Car keyboard state
 
 bool keyW = false;
 bool keyS = false;
 bool keyA = false;
 bool keyD = false;
-bool paused = false;
 
 // ------------------------------------------------------------
 // Car movement
@@ -315,15 +323,6 @@ const float CAR_MAX_Y = 1.85f * CAR_SCALE;
 
 const float CAR_MIN_Z = -3.15f * CAR_SCALE;
 const float CAR_MAX_Z = 2.85f * CAR_SCALE;
-
-// check if two AABBs overlap
-template <typename BoxA, typename BoxB>
-bool boxesOverlap(const BoxA& a, const BoxB& b)
-{
-    return (a.minX <= b.maxX && a.maxX >= b.minX) &&
-           (a.minY <= b.maxY && a.maxY >= b.minY) &&
-           (a.minZ <= b.maxZ && a.maxZ >= b.minZ);
-}
 
 // ------------------------------------------------------------
 // MATERIALS
@@ -478,6 +477,17 @@ void resetCarToStart()
     updateCarAABB();
 }
 
+void loseLife()
+{
+    lives--;
+    if (lives <= 0){
+        lives = 0;
+        gameOver = true;
+    } else{
+        resetCarToStart();
+    }
+}
+
 void handleCollisions(float oldX, float oldZ)
 {
 	const auto& cheerios = env.getCheerios();
@@ -488,7 +498,7 @@ void handleCollisions(float oldX, float oldZ)
 	// CHEERIOS 
 	for (const auto& c : cheerios)
 	{
-		if (boxesOverlap(carAABB, c.box))
+		if (env.checkOverlap(carAABB, c.box))
 		{
 			// O carro repõe a posição anterior e para
 			carX = oldX;
@@ -511,7 +521,7 @@ void handleCollisions(float oldX, float oldZ)
 	// BUTTERS 
 	for (const auto& b : butters)
 	{
-		if (boxesOverlap(carAABB, b.box))
+		if (env.checkOverlap(carAABB, b.box))
 		{
 			carX = oldX;
 			carZ = oldZ;
@@ -527,12 +537,19 @@ void handleCollisions(float oldX, float oldZ)
 	// ORANGES
 	for (const auto& o : oranges)
 	{
-		if (o.active && boxesOverlap(carAABB, o.box))
+		if (o.active && env.checkOverlap(carAABB, o.box))
 		{
-			resetCarToStart();     // repõe posição, velocidade e AABB do carro
         	env.hitOrange(o.id);
+			loseLife();
 			break;
 		}
+	}
+	
+	// Verificar se caiu da mesa
+	float halfTableX = env.getTableWidth() * 0.5f; 
+    float halfTableZ = env.getTableDepth() * 0.5f; 
+    if (fabs(carX) > halfTableX || fabs(carZ) > halfTableZ){  
+		loseLife(); 
 	}
 }
 
@@ -1273,7 +1290,7 @@ void renderSim(void)
 		dt = 0.05f;
 
 	// update the environment and car
-	if (!paused)
+	if (!paused && !gameOver && gameStarted)
 	{
 		env.update(dt);
 		updateCar(dt);
@@ -1389,9 +1406,6 @@ void renderSim(void)
 	if (fontLoaded)
 	{
 		glDisable(GL_DEPTH_TEST);
-		TextCommand textCmd = {paused ? std::string("PAUSED\nPress P to resume")
-									  : std::string("AVTM Racing 2026!"),
-							   {100, 100}, 0.5};
 		// the glyph contains transparent background colors and non-transparent for the actual character pixels. So we use the blending
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1399,15 +1413,44 @@ void renderSim(void)
 		glGetIntegerv(GL_VIEWPORT, m_viewport);
 
 		// viewer at origin looking down at  negative z direction
-
 		mu.loadIdentity(gmu::MODEL);
 		mu.loadIdentity(gmu::VIEW);
 		mu.pushMatrix(gmu::PROJECTION);
 		mu.loadIdentity(gmu::PROJECTION);
 		mu.ortho(m_viewport[0], m_viewport[0] + m_viewport[2] - 1, m_viewport[1], m_viewport[1] + m_viewport[3] - 1, -1, 1);
 		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-		textCmd.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-		renderer.renderText(textCmd);
+		float* hudPvm = mu.get(gmu::PROJ_VIEW_MODEL);
+		
+		// Vidas (canto superior esquerdo)
+		std::ostringstream livesStream;
+		livesStream << "Lives: " << lives;
+
+		TextCommand livesCmd = { livesStream.str(), {20.0f, WinY - 40.0f}, 0.4f };
+		livesCmd.pvm = hudPvm;
+		renderer.renderText(livesCmd);
+
+		// Mensagens centrais: Game Over e Paused
+		if (!gameStarted)
+		{
+			TextCommand menuCmd = { std::string("AVTM Racing 2026!\nPress R to start!"), 
+									{WinX / 2.0f - 150.0f, WinY / 2.0f}, 0.6f };
+			menuCmd.pvm = hudPvm;
+			renderer.renderText(menuCmd);
+		}
+		else if (gameOver)
+		{
+			TextCommand gameOverCmd = { std::string("GAME OVER\nPress R to restart"),
+										{WinX / 2.0f - 150.0f, WinY / 2.0f}, 0.6f };
+			gameOverCmd.pvm = hudPvm;
+			renderer.renderText(gameOverCmd);
+		}
+		else if (paused)
+		{
+			TextCommand pausedCmd = { std::string("PAUSED\nPress P to resume"),
+									{WinX / 2.0f - 150.0f, WinY / 2.0f}, 0.5f };
+			pausedCmd.pvm = hudPvm;
+			renderer.renderText(pausedCmd);
+		}
 		mu.popMatrix(gmu::PROJECTION);
 		glDisable(GL_BLEND);
 		glEnable(GL_DEPTH_TEST);
@@ -1461,13 +1504,14 @@ void processKeys(unsigned char key, int xx, int yy)
 		paused = !paused;
 		printf(paused ? "Game paused\n" : "Game resumed\n");
 		break;
-	case 'r': // reset
-		alpha = 57.0f;
-		_beta = 18.0f; // Camera Spherical Coordinates
-		r = 45.0f;
-		camX = r * sin(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
-		camZ = r * cos(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
-		camY = r * sin(_beta * 3.14f / 180.0f);
+	case 'r':
+	case 'R':
+		if (!gameStarted) { gameStarted = true; }
+		else if (gameOver) {
+			lives = MAX_LIVES;
+			gameOver = false;
+			resetCarToStart();
+		}
 		break;
 	case '1':
 		orthoProj = true;

@@ -58,8 +58,15 @@ public:
         float radius = 1.0f;
         float rotationAngle = 0.0f; // ângulo de rotação enquanto rola
         bool active = true;
-        AABB box;
 
+        // Estado do "salto" sobre um cheerio
+        float restY = 0.0f;          // altura de repouso (quando não está a saltar)
+        bool  hopping = false;
+        float hopTimer = 0.0f;
+        float hopHeight = 0.0f;      // altura do salto (= altura do cheerio que o desencadeou)
+        float hopDuration = 0.0f;    // duração do salto atual (= largura do cheerio / velocidade da laranja)
+
+        AABB box;
         void updateAABB() {
             box.minX = x - radius; box.maxX = x + radius;
             box.minY = y - radius; box.maxY = y + radius;
@@ -114,6 +121,8 @@ public:
     float getCheerioRadius()                      const { return cfg.cheerioOuterRadius; }
     float getFinishLinePosx()                     const { return cfg.finishLinePosx; }
     float getFinishLinePosz()                     const { return cfg.finishLinePosz; }
+    float getTableWidth()                         const { return cfg.tableWidth; }
+    float getTableDepth()                         const { return cfg.tableDepth; }
 
     float getRoadSurfaceY() const {
         return (cfg.tableHeight * 0.5f) + cfg.roadHeight;
@@ -122,6 +131,12 @@ public:
     void nudgeCheerio(int id, float dx, float dz);
     void hitButter(int id);
     void hitOrange(int id);
+
+    static inline bool checkOverlap(const Environment::AABB& a, const Environment::AABB& b) {
+        return (a.minX <= b.maxX && a.maxX >= b.minX) &&
+               (a.minY <= b.maxY && a.maxY >= b.minY) &&
+               (a.minZ <= b.maxZ && a.maxZ >= b.minZ);
+    }
 
 private:
     Config cfg;
@@ -152,6 +167,13 @@ private:
     void drawButters(Renderer& renderer, gmu& mu);
     void drawBoundingBoxes(Renderer& renderer, gmu& mu);
     void drawBox(Renderer& renderer, gmu& mu, const AABB& b);
+
+    // Colisões entre objetos do ambiente
+    void updateOrangeHop(Orange& orange, float deltaTime);
+    void checkOrangeCheerioHop(Orange& orange);
+    void resolveOrangeCollisions();
+    void resolveOrangeCollision(Orange& orange, const AABB& box);
+    void resolveOrangeOrangeCollision(Orange& a, Orange& b);
 };
 
 #endif // _ENVIRONMENT_H_
