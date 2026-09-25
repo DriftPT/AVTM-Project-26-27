@@ -43,18 +43,29 @@ uniform vec4 candlesLightPos0, candlesLightPos1, candlesLightPos2, candlesLightP
 out vec4 colorOut;
 
 // Calculate the global illumination
-vec3 calculateGlobalLight(vec3 n, vec3 e)
+vec3 calculateGlobalLight(vec3 n, vec3 e,out vec3 specular)
 {
     if (!globalLightOn)
         return vec3(0.0);
 
     vec3 l = normalize(globalLightPos.xyz);
 
-    float intensity = max(dot(n, l), 0.0);
+	// Ambient
+    vec3 ambient = mat.ambient.rgb;
 
+	// Diffuse
+    float intensity = max(dot(n, l), 0.0);
     vec3 diffuse = intensity * mat.diffuse.rgb;
 
-    return diffuse;
+	specular = vec3(0.0);
+
+    if (intensity > 0.0) {
+        vec3 h = normalize(l+e);
+        float intSpec = max(dot(h,n), 0.0);
+        specular = mat.specular.rgb * pow(intSpec, mat.shininess);
+    }
+
+    return ambient + diffuse;
 }
 
 //Calculate the spotlight illumination
@@ -133,7 +144,8 @@ void main() {
 	vec3 e = normalize(DataIn.eye);
 
 	//Global Light
-	vec3 globalLight = calculateGlobalLight(n, e);
+	vec3 globalSpecular; 
+	vec3 globalLight = calculateGlobalLight(n, e, globalSpecular);
 
 	// Spotlight
 	vec3 spotlight = vec3(0.0);
@@ -155,26 +167,30 @@ void main() {
 	}
 
 	// Final Light
-	vec3 finalLight = globalLight + spotlight + candleLights;
+	vec3 baseColor;
+	vec3 diffuseLight = globalLight + spotlight + candleLights;
 
 	// Textures
 	if(texMode == 0) //no texturing
-		colorOut = vec4(finalLight + mat.ambient.rgb, mat.diffuse.a);
+		baseColor = diffuseLight + mat.ambient.rgb;
 
 	else if(texMode == 1) // modulate diffuse color with texel color
 	{
 		texel = texture(texmap2, DataIn.tex_coord);  // texel from lighwood.tga
-		colorOut = vec4(max(finalLight * texel.rgb, 0.07 * texel.rgb), mat.diffuse.a);
+		baseColor = max(diffuseLight * texel.rgb, 0.07 * texel.rgb);
 	}
 	else if (texMode == 2) // diffuse color is replaced by texel color
 	{
 		texel = texture(texmap, DataIn.tex_coord);  // texel from stone.tga
-		colorOut = vec4(max(finalLight * texel.rgb, 0.07 * texel.rgb), mat.diffuse.a);
+		baseColor = max(diffuseLight * texel.rgb, 0.07 * texel.rgb);
 	}
 	else // multitexturing
 	{
 		texel = texture(texmap2, DataIn.tex_coord);  // texel from lighwood.tga
 		texel1 = texture(texmap1, DataIn.tex_coord);  // texel from checker.tga
-		colorOut = vec4(max(finalLight * texel.rgb * texel1.rgb, 0.07 * texel.rgb * texel1.rgb), mat.diffuse.a);
+		baseColor = max(diffuseLight * texel.rgb * texel1.rgb, 0.07 * texel.rgb * texel1.rgb);
 	}
+
+	vec3 finalColor = baseColor + globalSpecular; 
+	colorOut = vec4(finalColor, mat.diffuse.a);
 }
