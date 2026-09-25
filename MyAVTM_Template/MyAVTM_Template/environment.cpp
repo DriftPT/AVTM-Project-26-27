@@ -26,6 +26,7 @@ void Environment::init(Renderer& renderer, const Config& config) {
     buildTrackLayout();
     spawnButters();
     spawnOranges();
+    spawnPointOrbs();
 }
 
 void Environment::buildTrackLayout() {
@@ -162,32 +163,33 @@ void Environment::placeCheeriosOnSegment(float x0, float z0, float x1, float z1,
 }
 
 void Environment::spawnButters() {
+
+    static const float butterPositionsXZ[][2] = {
+        { -84.0f,  35.0f },  // estrada 0 (comprida) - manteiga 1
+        { -80.0f,   7.0f },  // estrada 0 (comprida) - manteiga 2
+        { -54.0f, -19.0f },  // estrada 1 - manteiga 1
+        { -40.0f, -25.0f },  // estrada 1 - manteiga 2
+        { -27.0f, -42.0f },  // estrada 2
+        {   0.0f, -63.0f },  // estrada 3
+        {  28.0f, -38.0f },  // estrada 4 (comprida) - manteiga 1
+        {  25.0f, -13.0f },  // estrada 4 (comprida) - manteiga 2
+        {  35.0f,  10.0f },  // estrada 5 - manteiga 1
+        {  75.0f,  17.0f },  // estrada 5 - manteiga 2
+        {  81.0f,  37.5f },  // estrada 6
+        {  45.5f,  65.0f },  // estrada 7 (comprida, tem a linha de meta) - manteiga 1
+        { -40.5f,  63.0f },  // estrada 7 (comprida, tem a linha de meta) - manteiga 2
+    };
+
     butters.clear();
     float tableTop = cfg.tableHeight * 0.5f;
+    int numButters = 13;
 
-    for (int i = 0; i < cfg.numButters; ++i) {
+    for (int i = 0; i < numButters; ++i) {
         Butter butter_i;
         butter_i.id = (int)butters.size();
-        int blockIdx = rand() % roadBlocks.size();
-        const RoadBlock& road = roadBlocks[blockIdx];
-
-        // Calcular os limites (mínimo e máximo) onde o centro da manteiga cabe
-        float minX = (road.centerX - road.halfLengthX) + (butter_i.sizeX * 0.5f);
-        float maxX = (road.centerX + road.halfLengthX) - (butter_i.sizeX * 0.5f);
-
-        float minZ = (road.centerZ - road.halfLengthZ) + (butter_i.sizeZ * 0.5f);
-        float maxZ = (road.centerZ + road.halfLengthZ) - (butter_i.sizeZ * 0.5f);
-
-		// criar um número aleatório entre 0 e 1, 0 é no inicio e 1 o fim
-        float t_x = (float)rand() / (float)RAND_MAX;
-        float t_z = (float)rand() / (float)RAND_MAX;
-        
-        // Interpolar diretamente entre o mínimo e o máximo
-        butter_i.x = minX + t_x * (maxX - minX);
-        butter_i.z = minZ + t_z * (maxZ - minZ);
-
+        butter_i.x = butterPositionsXZ[i][0];
+        butter_i.z = butterPositionsXZ[i][1];
         butter_i.y = tableTop + cfg.roadHeight + (butter_i.sizeY * 0.5f);
-        
         butter_i.updateAABB();
         butters.push_back(butter_i);
     }
@@ -277,6 +279,36 @@ void Environment::resetOrange(Orange& orange) {
     orange.updateAABB();
 }
 
+void Environment::spawnPointOrbs() {
+    // Posições (x, z) escolhidas manualmente. O Y é calculado para assentar na estrada.
+    static const float orbPositionsXZ[][2] = {
+        { -67.5f, -21.0f },
+        { -13.5f, -63.0f },
+        {  67.5f,  12.0f },
+        {  81.0f,  24.75f },
+        {  30.0f,  63.0f },
+    };
+
+    pointOrbs.clear();
+    int numOrbs = 5;
+    float orbY = getRoadSurfaceY() + cfg.orbRadius;
+
+    for (int i = 0; i < numOrbs; ++i) {
+        PointOrb orb;
+        orb.id = i;
+        orb.x = orbPositionsXZ[i][0];
+        orb.z = orbPositionsXZ[i][1];
+        orb.y = orbY;
+        orb.radius = cfg.orbRadius;
+        orb.active = true;
+        orb.respawnTimer = 0.0f;
+        orb.updateAABB();
+        pointOrbs.push_back(orb);
+    }
+}
+
+void Environment::resetPointOrbs() { spawnPointOrbs(); }
+
 // ------------------------ Update -------------------------
 void Environment::update(float deltaTime) {
     float limitX = cfg.tableWidth * 0.5f;
@@ -322,6 +354,50 @@ void Environment::update(float deltaTime) {
             if (b.shakeTimer < 0.0f) b.shakeTimer = 0.0f;
         }
     }
+
+    updatePointOrbs(deltaTime);
+}
+
+void Environment::checkOrangeCheerioHop(Orange& orange) {
+    for (const auto& c : cheerios) {
+        if (checkOverlap(orange.box, c.box)) {
+            float hopDistance = c.halfXZ * 2.0f; // largura do cheerio a atravessar
+
+            orange.hopping    = true;
+            orange.hopTimer   = 0.0f;
+            orange.hopHeight  = c.halfY * 2.0f;              // altura total do cheerio
+            orange.hopDuration = hopDistance / orange.speed; // quanto mais rápida, mais curto o salto
+            return; // um cheerio já chega para desencadear o salto
+        }
+    }
+}
+
+void Environment::updateOrangeHop(Orange& orange, float deltaTime) {
+    if (!orange.hopping) {
+        checkOrangeCheerioHop(orange);
+        return;
+    }
+    // Verificar se o salto terminou de acordo com o tempo decorrido
+    orange.hopTimer += deltaTime;
+    float t = orange.hopTimer / orange.hopDuration;
+    if (t >= 1.0f) {
+        orange.hopping = false;
+        orange.y = orange.restY;
+    } else {
+        orange.y = orange.restY + sinf(t * 3.14159f) * orange.hopHeight; // função seno para criar o arco do salto
+    }
+}
+
+void Environment::updatePointOrbs(float deltaTime) {
+    for (auto& orb : pointOrbs) {
+        if (orb.active) continue;
+
+        orb.respawnTimer -= deltaTime;
+        if (orb.respawnTimer <= 0.0f) {
+            orb.active = true;
+            orb.respawnTimer = 0.0f;
+        }
+    }
 }
 
 // ------------------------ Render ------------------------
@@ -334,6 +410,10 @@ void Environment::render(Renderer& renderer, gmu& mu) {
     drawOranges(renderer, mu);
     if (showBoundingBoxes)
         drawBoundingBoxes(renderer, mu);
+}
+
+void Environment::renderTranslucent(Renderer& renderer, gmu& mu) {
+    drawPointOrbs(renderer, mu);
 }
 
 void Environment::drawTable(Renderer& renderer, gmu& mu) {
@@ -573,6 +653,45 @@ void Environment::drawOranges(Renderer& renderer, gmu& mu) {
     }
 }
 
+void Environment::drawPointOrbs(Renderer& renderer, gmu& mu) {
+    float amb[]  = { 0.05f, 0.05f, 0.20f, 1.0f }; // azul 
+    float diff[] = { 0.20f, 0.40f, 1.00f, 0.35f }; // alpha baixo => transparência
+    float spec[] = { 0.60f, 0.75f, 1.00f, 1.0f }; // claro
+    memcpy(renderer.myMeshes[2].mat.ambient,  amb,  4 * sizeof(float));
+    memcpy(renderer.myMeshes[2].mat.diffuse,  diff, 4 * sizeof(float));
+    memcpy(renderer.myMeshes[2].mat.specular, spec, 4 * sizeof(float));
+    renderer.myMeshes[2].mat.shininess = 80.0f;
+
+    dataMesh data;
+    data.meshID  = 2;
+    data.texMode = 0; // sem textura, só o material
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE); // translúcido: não escreve no depth buffer
+
+    for (const auto& orb : pointOrbs) {
+        if (!orb.active) continue;
+
+        mu.pushMatrix(gmu::MODEL);
+        mu.translate(gmu::MODEL, orb.x, orb.y, orb.z);
+        mu.scale(gmu::MODEL, orb.radius, orb.radius, orb.radius);
+
+        mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+        mu.computeNormalMatrix3x3();
+
+        data.vm     = mu.get(gmu::VIEW_MODEL);
+        data.pvm    = mu.get(gmu::PROJ_VIEW_MODEL);
+        data.normal = mu.getNormalMatrix();
+        renderer.renderMesh(data);
+
+        mu.popMatrix(gmu::MODEL);
+    }
+
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+}
+
 // ------------------------ Bounding Boxes and Collisions ------------------------
 
 void Environment::drawBox(Renderer& renderer, gmu& mu, const AABB& b) {//TODO: Remover
@@ -632,34 +751,10 @@ void Environment::hitOrange(int id) {
     resetOrange(oranges[id]);
 }
 
-void Environment::checkOrangeCheerioHop(Orange& orange) {
-    for (const auto& c : cheerios) {
-        if (checkOverlap(orange.box, c.box)) {
-            float hopDistance = c.halfXZ * 2.0f; // largura do cheerio a atravessar
-
-            orange.hopping    = true;
-            orange.hopTimer   = 0.0f;
-            orange.hopHeight  = c.halfY * 2.0f;              // altura total do cheerio
-            orange.hopDuration = hopDistance / orange.speed; // quanto mais rápida, mais curto o salto
-            return; // um cheerio já chega para desencadear o salto
-        }
-    }
-}
-
-void Environment::updateOrangeHop(Orange& orange, float deltaTime) {
-    if (!orange.hopping) {
-        checkOrangeCheerioHop(orange);
-        return;
-    }
-    // Verificar se o salto terminou de acordo com o tempo decorrido
-    orange.hopTimer += deltaTime;
-    float t = orange.hopTimer / orange.hopDuration;
-    if (t >= 1.0f) {
-        orange.hopping = false;
-        orange.y = orange.restY;
-    } else {
-        orange.y = orange.restY + sinf(t * 3.14159f) * orange.hopHeight; // função seno para criar o arco do salto
-    }
+void Environment::hitPointOrb(int id) {
+    if (id < 0 || id >= (int)pointOrbs.size()) return;
+    pointOrbs[id].active = false;
+    pointOrbs[id].respawnTimer = cfg.orbRespawnTime;
 }
 
 //TODO: REVER
@@ -752,6 +847,7 @@ void Environment::resolveOrangeCollisions() {
         for (const auto& butter : butters) {
             if (!checkOverlap(orange.box, butter.box)) continue;
             resolveOrangeCollision(orange, butter.box);
+            hitButter(butter.id);
         }
     }
 

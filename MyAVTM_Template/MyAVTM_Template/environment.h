@@ -30,13 +30,16 @@ public:
 		float cheerioScale = 0.6f;        // escala do cheerio em relação ao tamanho original
 
         // Manteigas e Laranjas
-        int numButters = 10;
         int numOranges = 7;
         float orangeDefaultRadius = 0.8f;
 
 		// Linha de meta
 		float finishLinePosx = 0.0f; 
 		float finishLinePosz = 0.0f; 
+
+        // Point Orbs (bolas de pontos)
+        float orbRadius = 0.8f;
+        float orbRespawnTime = 20.0f; // segundos até reaparecer
     };
 
     struct AABB {
@@ -102,6 +105,21 @@ public:
         }
     };
 
+    struct PointOrb {
+        int id = 0;
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        float radius = 0.8f;
+        bool active = true;
+        float respawnTimer = 0.0f;
+        AABB box;
+
+        void updateAABB() {
+            box.minX = x - radius; box.maxX = x + radius;
+            box.minY = y - radius; box.maxY = y + radius;
+            box.minZ = z - radius; box.maxZ = z + radius;
+        }
+    };
+
     // Blocos da estrada e path points para auxílio no posicionamento
     struct PathPoint { float x, z; };
     
@@ -113,11 +131,13 @@ public:
     void init(Renderer& renderer, const Config& config = Config());
     void update(float deltaTime);
     void render(Renderer& renderer, gmu& mu);
+    void renderTranslucent(Renderer& renderer, gmu& mu);
 
     const std::vector<RoadBlock>& getRoadBlocks() const { return roadBlocks; }
     const std::vector<Cheerio>& getCheerios()     const { return cheerios; }
     const std::vector<Butter>& getButters()       const { return butters; }
     const std::vector<Orange>& getOranges()       const { return oranges; }
+    const std::vector<PointOrb>& getPointOrbs()   const { return pointOrbs; }
     float getCheerioRadius()                      const { return cfg.cheerioOuterRadius; }
     float getFinishLinePosx()                     const { return cfg.finishLinePosx; }
     float getFinishLinePosz()                     const { return cfg.finishLinePosz; }
@@ -131,6 +151,8 @@ public:
     void nudgeCheerio(int id, float dx, float dz);
     void hitButter(int id);
     void hitOrange(int id);
+    void hitPointOrb(int id);
+    void resetPointOrbs();
 
     static inline bool checkOverlap(const Environment::AABB& a, const Environment::AABB& b) {
         return (a.minX <= b.maxX && a.maxX >= b.minX) &&
@@ -147,6 +169,7 @@ private:
     std::vector<Orange> oranges;
     std::vector<Butter> butters;
     std::vector<Cheerio> cheerios;
+    std::vector<PointOrb> pointOrbs;
 
     float cheerioY = 0.0f;
     bool showBoundingBoxes = false;
@@ -157,7 +180,9 @@ private:
     void placeCheeriosOnSegment(float x0, float z0, float x1, float z1, float spacing);
     void spawnButters();
     void spawnOranges();
+    void spawnPointOrbs();
     void resetOrange(Orange& orange);
+    void updatePointOrbs(float deltaTime);
 
     void drawTable(Renderer& renderer, gmu& mu);
     void drawRoad(Renderer& renderer, gmu& mu);
@@ -165,6 +190,7 @@ private:
     void drawCheerios(Renderer& renderer, gmu& mu);
     void drawOranges(Renderer& renderer, gmu& mu);
     void drawButters(Renderer& renderer, gmu& mu);
+    void drawPointOrbs(Renderer& renderer, gmu& mu);
     void drawBoundingBoxes(Renderer& renderer, gmu& mu);
     void drawBox(Renderer& renderer, gmu& mu, const AABB& b);
 

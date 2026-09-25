@@ -111,12 +111,12 @@ float globalLightPos[4] = { 0.0f, 20.0f, 0.0f, 0.0f };
 
 // 6 Candles Lights Positions - Pontual 
 float candles[6][4] = {
-	{ -40.0f, env.getRoadSurfaceY() + 1.6f, 15.0f, 1.0f },
-	{ -35.0f, env.getRoadSurfaceY() + 1.6f, -30.0f, 1.0f },
-	{ 0.0f, env.getRoadSurfaceY() + 1.6f, -30.0f, 1.0f },
-	{ 40.0f, env.getRoadSurfaceY() + 1.6f, -10.0f, 1.0f },
-	{ 40.0f, env.getRoadSurfaceY() + 1.6f, 28.0f, 1.0f },
-	{ 0.0f, env.getRoadSurfaceY() + 1.6f, 28.0f, 1.0f }
+	{ -54.5f, env.getRoadSurfaceY() + 1.6f,  20.5f, 1.0f },
+	{ -47.7f, env.getRoadSurfaceY() + 1.6f, -40.9f, 1.0f },
+	{   0.0f, env.getRoadSurfaceY() + 1.6f, -40.9f, 1.0f },
+	{  54.5f, env.getRoadSurfaceY() + 1.6f, -13.6f, 1.0f },
+	{  54.5f, env.getRoadSurfaceY() + 1.6f,  38.2f, 1.0f },
+	{   0.0f, env.getRoadSurfaceY() + 1.6f,  38.2f, 1.0f }
 };
 
 // Spotlight
@@ -286,6 +286,7 @@ bool gameStarted = false;
 const int POINTS_CHEERIO_HIT = -10;
 const int POINTS_BUTTER_HIT  = -15;
 const int POINTS_LIFE_LOST   = -100;
+const int POINTS_ORB_COLLECTED   = +100;
 int points = 0;
 int lastScoreChange = 0;
 float scoreChangeTimer = 0.0f;
@@ -556,7 +557,8 @@ void handleCollisions(float oldX, float oldZ)
 	const auto& cheerios = env.getCheerios();
 	const auto& butters  = env.getButters();
 	const auto& oranges  = env.getOranges();
-	const float CHEERIO_PUSH = 0.5f; // o quanto o cheerio se move quando é atingido
+	const auto& orbs     = env.getPointOrbs();
+	const float CHEERIO_PUSH = 0.8f; // o quanto o cheerio se move quando é atingido
 
 	// CHEERIOS 
 	bool cheerioHit = false;
@@ -617,6 +619,17 @@ void handleCollisions(float oldX, float oldZ)
 		{
         	env.hitOrange(o.id);
 			loseLife();
+			break;
+		}
+	}
+
+	// POINT ORBS
+	for (const auto& orb : orbs)
+	{
+		if (orb.active && env.checkOverlap(carAABB, orb.box))
+		{
+			env.hitPointOrb(orb.id);
+			addPoints(POINTS_ORB_COLLECTED);
 			break;
 		}
 	}
@@ -1445,6 +1458,7 @@ void renderSim(void)
 		drawCar();
 	}
 	drawCarAABB();
+	env.renderTranslucent(renderer, mu); // orbs por último
 
 	// Render text (bitmap fonts) in screen coordinates. So use ortoghonal projection with viewport coordinates.
 	// Each glyph quad texture needs just one byte color channel: 0 in background and 1 for the actual character pixels. Use it for alpha blending
@@ -1606,6 +1620,7 @@ void processKeys(unsigned char key, int xx, int yy)
         	scoreChangeTimer = 0.0f;
 			gameOver = false;
 			resetCarToStart();
+			env.resetPointOrbs();
 		}
 		break;
 	case '1':
