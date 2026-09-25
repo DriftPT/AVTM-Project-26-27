@@ -1344,8 +1344,10 @@ void renderSim(void)
 	// Desenha mesa / estrada / linha de meta / cheerios / manteigas / laranjas
 	env.render(renderer, mu);
 	// Draw the car
-	drawCar();
-	drawCarAABB();
+	if (!objVisible) {
+		drawCar();
+		drawCarAABB();
+	}
 
 	// Render text (bitmap fonts) in screen coordinates. So use ortoghonal projection with viewport coordinates.
 	// Each glyph quad texture needs just one byte color channel: 0 in background and 1 for the actual character pixels. Use it for alpha blending
