@@ -284,9 +284,9 @@ void Environment::update(float deltaTime) {
 
     totalPlayTime += deltaTime;
 
-	// Aumentar a velocidade das laranjas com o tempo com um maximo de 3.0x
-    float speedMultiplier = 1.0f + totalPlayTime * 0.02f;
-    if (speedMultiplier > 3.0f) speedMultiplier = 3.0f;
+	// Aumentar a velocidade das laranjas com o tempo com um maximo de 5.0x
+    float speedMultiplier = 1.0f + totalPlayTime * 0.05f;
+    if (speedMultiplier > 5.0f) speedMultiplier = 5.0f;
     for (auto& orange : oranges) {
         if (!orange.active) continue;
 

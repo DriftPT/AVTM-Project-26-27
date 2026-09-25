@@ -267,13 +267,23 @@ void static setCameraBehind()
 #define MESH_TORUS 5
 
 // ------------------------------------------------------------
-// Gameplay
+// Gameplay HUD
 
 const int MAX_LIVES = 5;
 int lives = MAX_LIVES;
 bool gameOver = false;
 bool paused = false;
 bool gameStarted = false;
+
+// Pontos
+const int POINTS_CHEERIO_HIT = -10;
+const int POINTS_BUTTER_HIT  = -15;
+const int POINTS_LIFE_LOST   = -100;
+int points = 0;
+
+// Evita descontar pontos em todos os frames enquanto o carro está encostado ao obstáculo
+bool wasHittingCheerio = false;
+bool wasHittingButter  = false;
 
 // ------------------------------------------------------------
 // Car keyboard state
@@ -479,6 +489,7 @@ void resetCarToStart()
 
 void loseLife()
 {
+	points += POINTS_LIFE_LOST;
     lives--;
     if (lives <= 0){
         lives = 0;
@@ -496,16 +507,12 @@ void handleCollisions(float oldX, float oldZ)
 	const float CHEERIO_PUSH = 0.5f; // o quanto o cheerio se move quando é atingido
 
 	// CHEERIOS 
+	bool cheerioHit = false;
 	for (const auto& c : cheerios)
 	{
 		if (env.checkOverlap(carAABB, c.box))
-		{
-			// O carro repõe a posição anterior e para
-			carX = oldX;
-			carZ = oldZ;
-			carVelocity = 0.0f;
-			carAcceleration = 0.0f;
-			updateCarAABB();
+		{	
+			cheerioHit = true;
 
 			// Empurra ligeiramente o cheerio para longe do carro
 			float dx = c.x - carX;
@@ -513,26 +520,43 @@ void handleCollisions(float oldX, float oldZ)
 			float len = sqrtf(dx * dx + dz * dz);
 			if (len > 0.0001f) { dx /= len; dz /= len; } // normalização do vetor de deslocamento
 			env.nudgeCheerio(c.id, dx * CHEERIO_PUSH, dz * CHEERIO_PUSH);
-
-			break;
 		}
 	}
+	// Se o carro colidiu com um cheerio, repõe a posição anterior e para
+	if (cheerioHit){
+		if (!wasHittingCheerio)
+			points += POINTS_CHEERIO_HIT;
+
+		// O carro repõe a posição anterior e para
+		carX = oldX;
+		carZ = oldZ;
+		carVelocity = 0.0f;
+		carAcceleration = 0.0f;
+		updateCarAABB();
+	}
+	wasHittingCheerio = cheerioHit;
 
 	// BUTTERS 
+	bool butterHit = false;
 	for (const auto& b : butters)
 	{
 		if (env.checkOverlap(carAABB, b.box))
 		{
-			carX = oldX;
-			carZ = oldZ;
-			carVelocity = 0.0f;
-			carAcceleration = -10.0f;
-			updateCarAABB();
-
+			butterHit = true;
 			env.hitButter(b.id);
-			break;
 		}
 	}
+	if (butterHit){
+		if (!wasHittingButter)
+			points += POINTS_BUTTER_HIT;
+
+		carX = oldX;
+		carZ = oldZ;
+		carVelocity = 0.0f;
+		carAcceleration = -10.0f;
+		updateCarAABB();
+	}
+	wasHittingButter = butterHit;
 
 	// ORANGES
 	for (const auto& o : oranges)
@@ -1429,6 +1453,13 @@ void renderSim(void)
 		livesCmd.pvm = hudPvm;
 		renderer.renderText(livesCmd);
 
+		// Pontos (logo abaixo das vidas)
+		std::ostringstream pointsStream;
+		pointsStream << "Score: " << points;
+		TextCommand pointsCmd = { pointsStream.str(), {20.0f, WinY - 70.0f}, 0.4f };
+		pointsCmd.pvm = hudPvm;
+		renderer.renderText(pointsCmd);
+
 		// Mensagens centrais: Game Over e Paused
 		if (!gameStarted)
 		{
@@ -1439,8 +1470,10 @@ void renderSim(void)
 		}
 		else if (gameOver)
 		{
-			TextCommand gameOverCmd = { std::string("GAME OVER\nPress R to restart"),
-										{WinX / 2.0f - 150.0f, WinY / 2.0f}, 0.6f };
+			std::ostringstream gameOverStream;
+    		gameOverStream << "GAME OVER\nScore: " << points << "\nPress R to restart";
+			TextCommand gameOverCmd = { gameOverStream.str(), {WinX / 2.0f - 150.0f, WinY / 2.0f}, 0.6f };
+
 			gameOverCmd.pvm = hudPvm;
 			renderer.renderText(gameOverCmd);
 		}
@@ -1509,6 +1542,7 @@ void processKeys(unsigned char key, int xx, int yy)
 		if (!gameStarted) { gameStarted = true; }
 		else if (gameOver) {
 			lives = MAX_LIVES;
+			points = 0;
 			gameOver = false;
 			resetCarToStart();
 		}
