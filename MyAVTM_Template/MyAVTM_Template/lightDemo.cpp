@@ -335,14 +335,14 @@ bool showCarAABB = false;
 void toggleCarAABB() { showCarAABB = !showCarAABB; }
 
 // Car bounding box dimensions
-const float CAR_MIN_X = -1.815f * CAR_SCALE;
-const float CAR_MAX_X = 1.815f * CAR_SCALE;
+float CAR_MIN_X = -1.815f * CAR_SCALE;
+float CAR_MAX_X = 1.815f * CAR_SCALE;
 
-const float CAR_MIN_Y = 0.0f;
-const float CAR_MAX_Y = 1.85f * CAR_SCALE;
+float CAR_MIN_Y = 0.0f;
+float CAR_MAX_Y = 1.85f * CAR_SCALE;
 
-const float CAR_MIN_Z = -3.15f * CAR_SCALE;
-const float CAR_MAX_Z = 2.85f * CAR_SCALE;
+float CAR_MIN_Z = -3.15f * CAR_SCALE;
+float CAR_MAX_Z = 2.85f * CAR_SCALE;
 
 // ------------------------------------------------------------
 // MATERIALS
@@ -389,9 +389,9 @@ CarMaterial darkMaterial = {
 
 // Windshield and windows - light blue transparent glass
 CarMaterial glassMaterial = {
-	{ 0.05f, 0.10f, 0.12f, 1.0f },
-	{ 0.35f, 0.70f, 0.80f, 0.35f },
-	{ 0.85f, 0.95f, 1.00f, 1.0f },
+	{ 0.05f, 0.10f, 0.15f, 1.0f },
+	{ 0.15f, 0.35f, 0.45f, 0.7f },
+	{ 0.90f, 0.95f, 1.00f, 1.0f },
 	90.0f
 };
 
@@ -442,6 +442,41 @@ void drawMesh(int meshID, int texMode = 0)
 	renderer.renderMesh(data);
 }
 
+
+// Function to update the car's bounding box based on the Assimp model's bounding box
+void updateCarBounds()
+{
+	if (objVisible && scene != nullptr)
+	{
+		aiVector3D objMin, objMax;
+		get_bounding_box(scene, &objMin, &objMax);
+
+		float scale = scaleFactor * 4.5f;
+
+		CAR_MIN_X = objMin.x * scale;
+		CAR_MAX_X = objMax.x * scale;
+
+		CAR_MIN_Z = -objMax.y * scale;
+		CAR_MAX_Z = -objMin.y * scale;
+
+		CAR_MIN_Y = objMin.z * scale;
+		CAR_MAX_Y = objMax.z * scale;
+	}
+	else
+	{
+		CAR_MIN_X = -1.815f * CAR_SCALE;
+		CAR_MAX_X = 1.815f * CAR_SCALE;
+
+		CAR_MIN_Y = 0.0f;
+		CAR_MAX_Y = 1.85f * CAR_SCALE;
+
+		CAR_MIN_Z = -3.15f * CAR_SCALE;
+		CAR_MAX_Z = 2.85f * CAR_SCALE;
+	}
+}
+
+
+// Function to update the car's Axis-Aligned Bounding Box (AABB) based on its position and orientation
 void updateCarAABB()
 {
 	float angleRad = carAngle * 3.14f / 180.0f;
@@ -1425,7 +1460,7 @@ void renderSim(void)
 			mu.pushMatrix(gmu::MODEL);
 
 			mu.multMatrix(gmu::MODEL, renderer.myMeshes[n].transform);
-			mu.translate(gmu::MODEL, carX+1.0f, carBaseY, carZ);
+			mu.translate(gmu::MODEL, carX, carBaseY, carZ);
 			mu.rotate(gmu::MODEL, -90.0f, 1.0f, 0.0f, 0.0f);
 			mu.rotate(gmu::MODEL, carAngle, 0.0f, 0.0f, 1.0f);
 			mu.scale(gmu::MODEL,scaleFactor*4.5,scaleFactor*4.5,scaleFactor*4.5);
@@ -1620,10 +1655,15 @@ void processKeys(unsigned char key, int xx, int yy)
 	case 'F':
 	case 'f':
 		togglefog();
+		printf("Fog [%d]\n", fogEnabled);
 		break;
+
 	case 'O':
 	case 'o':
 		objVisible = !objVisible;
+		updateCarBounds();         
+		updateCarAABB();
+
 		printf("OBJ Visibility [%d]\n", objVisible);
 		break;
 	}
