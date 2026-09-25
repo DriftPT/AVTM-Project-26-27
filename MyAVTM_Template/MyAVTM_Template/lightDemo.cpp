@@ -90,7 +90,7 @@ const float CAR_SCALE = 0.8f;
 bool fixedCamera = false;
 bool trackingCamera = false;
 float cameraOrientation = 0.0f;
-bool globalIllumination = false;
+bool globalIllumination = true;
 bool candlesIllumination = false;
 
 // Mouse Tracking Variables
@@ -106,12 +106,12 @@ float globalLightPos[4] = { 0.0f, 20.0f, 0.0f, 0.0f };
 
 // 6 Candles Lights Positions - Pontual 
 float candles[6][4] = {
-	{ -60.0f, 10.0f, 25.0f, 1.0f },
-	{ -20.0f, 10.0f, -19.0f, 1.0f },
-	{ 20.0f, 10.0f, -45.0f, 1.0f },
-	{ 20.0f, 10.0f, 8.0f, 1.0f },
-	{ -10.0f, 10.0f, 42.0f, 1.0f },
-	{ 60.0f, 10.0f, 42.0f, 1.0f }
+	{ -40.0f, env.getRoadSurfaceY() + 1.5f, 15.0f, 1.0f },
+	{ -35.0f, env.getRoadSurfaceY() + 1.5f, -30.0f, 1.0f },
+	{ 0.0f, env.getRoadSurfaceY() + 1.5f, -30.0f, 1.0f },
+	{ 40.0f, env.getRoadSurfaceY() + 1.5f, -10.0f, 1.0f },
+	{ 40.0f, env.getRoadSurfaceY() + 1.5f, 28.0f, 1.0f },
+	{ 0.0f, env.getRoadSurfaceY() + 1.5f, 28.0f, 1.0f }
 };
 
 // Spotlight
@@ -1158,34 +1158,40 @@ void drawCarAABB()
 // To Be Deleted !!!
 //
 
-void drawCandleMarkers() {
-	CarMaterial candleMarkerMaterial = {
-		{ 0.20f, 0.12f, 0.02f, 1.0f },
-		{ 1.00f, 0.55f, 0.10f, 1.0f },
-		{ 1.00f, 0.80f, 0.30f, 1.0f },
-		80.0f
+void drawCandles() {
+	CarMaterial candleBase = {
+		{ 0.35f, 0.30f, 0.22f, 1.0f },
+		{ 0.90f, 0.80f, 0.65f, 1.0f },
+		{ 1.00f, 0.90f, 0.75f, 1.0f },
+		40.0f
 	};
 
-	setMeshMaterial(MESH_SPHERE, candleMarkerMaterial);
+	CarMaterial candleFire = {
+		{ 0.30f, 0.15f, 0.00f, 1.0f },
+		{ 1.00f, 0.70f, 0.10f, 1.0f },
+		{ 1.00f, 0.90f, 0.50f, 1.0f },
+		100.0f
+	};
 
-	for (int i = 0; i < 6; i++)
-	{
-		mu.pushMatrix(gmu::MODEL);
+		for (int i = 0; i < 6; i++){
+			// Cilindro base
+			setMeshMaterial(MESH_CYLINDER, candleBase);
+			mu.pushMatrix(gmu::MODEL);
+			mu.translate(gmu::MODEL, candles[i][0], env.getRoadSurfaceY()+0.7f, candles[i][2]);
+			mu.scale(gmu::MODEL, 0.5f, 0.7f, 0.5f);
+			drawMesh(MESH_CYLINDER);
+			mu.popMatrix(gmu::MODEL);
 
-		mu.translate(
-			gmu::MODEL,
-			candles[i][0],
-			candles[i][1],
-			candles[i][2]
-		);
 
-		mu.scale(gmu::MODEL, 0.25f, 0.25f, 0.25f);
-
-		drawMesh(MESH_SPHERE);
-
-		mu.popMatrix(gmu::MODEL);
+			// Cilindro pequeno (fogo)
+			setMeshMaterial(MESH_CYLINDER, candleFire);
+			mu.pushMatrix(gmu::MODEL);
+			mu.translate(gmu::MODEL, candles[i][0], env.getRoadSurfaceY() +0.7f+0.6f, candles[i][2]);
+			mu.scale(gmu::MODEL, 0.1f, 0.25f, 0.1f);
+			drawMesh(MESH_CYLINDER);
+			mu.popMatrix(gmu::MODEL);
+		}
 	}
-}
 
 void updateCarHeadlights(float headlightsWorld[2][4], float coneDirWorld[4])
 {
@@ -1312,7 +1318,7 @@ void renderSim(void)
 	}
 	renderer.setCandlesLights(candlesIllumination, candlesEye);
 
-	//drawCandleMarkers();
+	drawCandles();
 
 	// Desenha mesa / estrada / linha de meta / cheerios / manteigas / laranjas
 	env.render(renderer, mu);
@@ -1487,6 +1493,10 @@ void processKeysUp(unsigned char key, int xx, int yy)
 
 void processMouseButtons(int button, int state, int xx, int yy)
 {
+	// Block the camera movement by the mouse
+	if (fixedCamera)
+		return;
+
 	// start tracking the mouse
 	if (state == GLUT_DOWN)
 	{
