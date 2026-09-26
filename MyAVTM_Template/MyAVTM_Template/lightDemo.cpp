@@ -73,8 +73,9 @@ float r = 45.0f;
 bool orthoProj = false;
 bool perspProj = true;
 const float PERSPECTIVE_FOV = 53.13f;
-const float ORTHO_SIZE = 30.0f;
-const float TOP_CAMERA_HEIGHT = 70.0f;
+const float ORTHO_SIZE = 100.0f;           
+const float TOP_CAMERA_HEIGHT = 200.0f;     
+const float FOLLOW_CAMERA_DISTANCE = 25.0f;
 
 // Car starting position (start line)
 float CAR_START_X = 0;
@@ -107,7 +108,7 @@ long myTime, timebase = 0, frame = 0;
 char s[32];
 
 // Global Illumination - Directional
-float globalLightPos[4] = { 0.0f, 20.0f, 0.0f, 0.0f };
+float globalLightPos[4] = { 0.2f, 1.0f, 0.3f, 0.0f };
 
 // 6 Candles Lights Positions - Pontual 
 float candles[6][4] = {
@@ -131,9 +132,7 @@ float spotCosCutOff = 0.93;
 // Fog
 bool fogEnabled = true;
 void togglefog() { fogEnabled = !fogEnabled; }
-float fogColor[3] = { 0.5f, 0.5f, 0.5f };
-float fogStart = 40.0f;
-float fogEnd = 120.0f;
+float fogColor[3] = { 0.5f, 0.6f, 0.7f };
 
 bool fontLoaded = false;
 
@@ -199,7 +198,7 @@ void changeSize(int w, int h)
 	else if (orthoProj)
 	{
 		mu.loadIdentity(gmu::PROJECTION);
-		mu.ortho(-ORTHO_SIZE * ratio, ORTHO_SIZE * ratio, -ORTHO_SIZE, ORTHO_SIZE, -100.0f, 100.0f);
+		mu.ortho(-ORTHO_SIZE * ratio, ORTHO_SIZE * ratio, -ORTHO_SIZE, ORTHO_SIZE, -300.0f, 300.0f);
 	}
 }
 
@@ -225,7 +224,7 @@ void updateProjection()
 	else if (orthoProj)
 	{
 		mu.loadIdentity(gmu::PROJECTION);
-		mu.ortho(-ORTHO_SIZE * ratio, ORTHO_SIZE * ratio, -ORTHO_SIZE, ORTHO_SIZE, -100.0f, 100.0f);
+		mu.ortho(-ORTHO_SIZE * ratio, ORTHO_SIZE * ratio, -ORTHO_SIZE, ORTHO_SIZE, -300.0f, 300.0f);
 	}
 	glutPostRedisplay(); // viewport refresh
 }
@@ -256,7 +255,7 @@ void static setCameraBehind()
 {
 	alpha = 180.0f + carAngle + cameraOrientation;
 	_beta = 20.0f; // Behind Camera Spherical Coordinates - alpha horizontal rotation - beta vertical rotation
-	r = TOP_CAMERA_HEIGHT;
+	r = FOLLOW_CAMERA_DISTANCE;
 	camX = carX + r * sin(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
 	camZ = carZ + r * cos(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
 	camY = carBaseY + r * sin(_beta * 3.14f / 180.0f);
@@ -983,57 +982,6 @@ void drawCar()
 	mu.popMatrix(gmu::MODEL);
 
 	// ------------------------------------------------------------
-	// FRONT WINDSHIELD
-
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-	mu.pushMatrix(gmu::MODEL);
-
-	mu.translate(gmu::MODEL, 0.0f, 1.4f, 0.7f);
-	mu.scale(gmu::MODEL, 2.0f, 0.5f, 0.2f);
-	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
-
-	setMeshMaterial(MESH_CUBE, glassMaterial);
-	drawMesh(MESH_CUBE);
-
-	mu.popMatrix(gmu::MODEL);
-
-	// ------------------------------------------------------------
-	// REAR WINDOW
-
-	mu.pushMatrix(gmu::MODEL);
-
-	mu.translate(gmu::MODEL, 0.0f, 1.4f, -1.5f);
-	mu.scale(gmu::MODEL, 2.0f, 0.5f, 0.2f);
-	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
-
-	setMeshMaterial(MESH_CUBE, glassMaterial);
-	drawMesh(MESH_CUBE);
-
-	mu.popMatrix(gmu::MODEL);
-
-
-	// ------------------------------------------------------------
-	// SIDE WINDOWS
-
-	// right windows
-	drawSideWindow(-1.1f, 0.15f);
-	drawSideWindow(-1.1f, -0.95f);
-
-	// left windows
-	drawSideWindow(1.1f, 0.15f);
-	drawSideWindow(1.1f, -0.95f);
-
-	// ------------------------------------------------------------
-	// MIRRORS
-
-	drawMirror(-1.0f);  // Right mirror
-	drawMirror(1.0f);   // Left mirror
-
-	glDisable(GL_BLEND);
-
-	// ------------------------------------------------------------
 	// WHEELS
 
 	drawWheel(-1.65f, 0.5f, 1.9f); // Front right
@@ -1145,7 +1093,6 @@ void drawCar()
 
 	mu.translate(gmu::MODEL, -1.3f, 0.9f, -2.7f);
 	mu.scale(gmu::MODEL, 0.15f, 0.15f, 0.1f);
-	;
 	setMeshMaterial(MESH_SPHERE, rearLightMaterial);
 	drawMesh(MESH_SPHERE);
 
@@ -1166,7 +1113,6 @@ void drawCar()
 
 	mu.translate(gmu::MODEL, 1.3f, 0.9f, -2.7f);
 	mu.scale(gmu::MODEL, 0.15f, 0.15f, 0.1f);
-	;
 	setMeshMaterial(MESH_SPHERE, rearLightMaterial);
 	drawMesh(MESH_SPHERE);
 
@@ -1236,6 +1182,61 @@ void drawCar()
 	drawMesh(MESH_CUBE);
 
 	mu.popMatrix(gmu::MODEL);
+
+
+	// GLASS MATERIAL
+	// ------------------------------------------------------------
+	// FRONT WINDSHIELD
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glDepthMask(GL_FALSE);
+
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, 0.0f, 1.4f, 0.7f);
+	mu.scale(gmu::MODEL, 2.0f, 0.5f, 0.2f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+
+	setMeshMaterial(MESH_CUBE, glassMaterial);
+	drawMesh(MESH_CUBE);
+
+	mu.popMatrix(gmu::MODEL);
+
+	// ------------------------------------------------------------
+	// REAR WINDOW
+
+	mu.pushMatrix(gmu::MODEL);
+
+	mu.translate(gmu::MODEL, 0.0f, 1.4f, -1.5f);
+	mu.scale(gmu::MODEL, 2.0f, 0.5f, 0.2f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+
+	setMeshMaterial(MESH_CUBE, glassMaterial);
+	drawMesh(MESH_CUBE);
+
+	mu.popMatrix(gmu::MODEL);
+
+
+	// ------------------------------------------------------------
+	// SIDE WINDOWS
+
+	// right windows
+	drawSideWindow(-1.1f, 0.15f);
+	drawSideWindow(-1.1f, -0.95f);
+
+	// left windows
+	drawSideWindow(1.1f, 0.15f);
+	drawSideWindow(1.1f, -0.95f);
+
+	// ------------------------------------------------------------
+	// MIRRORS
+
+	drawMirror(-1.0f);  // Right mirror
+	drawMirror(1.0f);   // Left mirror
+
+	glDepthMask(GL_TRUE);
+	glDisable(GL_BLEND);
 
 	// ------------------------------------------------------------
 	// END OF CAR
@@ -1340,7 +1341,7 @@ void updateCarHeadlights(float headlightsWorld[2][4], float coneDirWorld[4])
 
 		// Aplicar translação do carro
 		headlightsWorld[i][0] = carX + rotatedX;
-		headlightsWorld[i][1] = carBaseY;
+		headlightsWorld[i][1] = carBaseY + localY;
 		headlightsWorld[i][2] = carZ + rotatedZ;
 		headlightsWorld[i][3] = 1.0f;
 	}
@@ -1449,7 +1450,7 @@ void renderSim(void)
 	drawCandles();
 
 	// Fog settings
-	renderer.setFog(fogEnabled, fogColor, fogStart, fogEnd);
+	renderer.setFog(fogEnabled, fogColor);
 
 	// Desenha mesa / estrada / linha de meta / cheerios / manteigas / laranjas
 	env.render(renderer, mu);
@@ -2001,7 +2002,7 @@ int main(int argc, char **argv)
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_MULTISAMPLE);
-	glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
+	glClearColor(0.5f, 0.6f, 0.7f, 1.0f);
 
 	printf("Vendor: %s\n", glGetString(GL_VENDOR));
 	printf("Renderer: %s\n", glGetString(GL_RENDERER));

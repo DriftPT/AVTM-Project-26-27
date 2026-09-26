@@ -215,7 +215,7 @@ void Renderer::setSpotLightMode(bool spotLightMode) {
         glUniform1i(loc, 0);
 }
 
-void Renderer::setFog(bool enabled, float* color, float start, float end) {
+void Renderer::setFog(bool enabled, float* color) {
     GLint loc;
 
     loc = glGetUniformLocation(program, "fogEnabled");
@@ -226,12 +226,6 @@ void Renderer::setFog(bool enabled, float* color, float start, float end) {
 
     loc = glGetUniformLocation(program, "fogColor");
     glUniform3fv(loc, 1, color);
-
-    loc = glGetUniformLocation(program, "fogStart");
-    glUniform1f(loc, start);
-
-    loc = glGetUniformLocation(program, "fogEnd");
-    glUniform1f(loc, end);
 }
 
 void Renderer::setLightPos(float* lightPos) {

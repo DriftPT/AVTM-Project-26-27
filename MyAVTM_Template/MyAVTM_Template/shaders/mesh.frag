@@ -42,105 +42,85 @@ uniform vec4 candlesLightPos0, candlesLightPos1, candlesLightPos2, candlesLightP
 
 uniform bool fogEnabled;
 uniform vec3 fogColor;
-uniform float fogStart;
-uniform float fogEnd;
 uniform int depthFog;
 
 out vec4 colorOut;
 
 // Calculate the global illumination
-vec3 calculateGlobalLight(vec3 n, vec3 e,out vec3 specular)
+vec3 calculateGlobalLight(vec3 n, vec3 e, out vec3 specular)
 {
+    specular = vec3(0.0);
+
     if (!globalLightOn)
         return vec3(0.0);
 
     vec3 l = normalize(globalLightPos.xyz);
 
-	// Ambient
-    vec3 ambient = mat.ambient.rgb;
-
-	// Diffuse
+    // Diffuse light intensity
     float intensity = max(dot(n, l), 0.0);
-    vec3 diffuse = intensity * mat.diffuse.rgb;
 
-	specular = vec3(0.0);
-
+    // Specular
     if (intensity > 0.0) {
-        vec3 h = normalize(l+e);
-        float intSpec = max(dot(h,n), 0.0);
+        vec3 h = normalize(l + e);
+        float intSpec = max(dot(h, n), 0.0);
         specular = mat.specular.rgb * pow(intSpec, mat.shininess);
     }
 
-    return ambient + diffuse;
+    return vec3(intensity);
 }
 
 //Calculate the spotlight illumination
-vec3 calculateSpotLight(vec4 lightPos, vec3 spotDirection, vec3 n, vec3 e){
-	vec4 spec = vec4(0.0);
-	float intensity = 0.0f;
-	float intSpec = 0.0f;
+vec3 calculateSpotLight(vec4 lightPos, vec3 spotDirection, vec3 n, vec3 e, out vec3 specular)
+{
+    specular = vec3(0.0);
 
-	float att = 0.0;
-	float spotExp = 60.0;
-
-	if (!spotlight_mode) //spotlight on?
-		return vec3(0.0);
-
-	// Vector from fragment to light
-	vec3 lightVector = lightPos.xyz - DataIn.fragPos;
-    float distanceToLight = length(lightVector);
-
-	// Direction from fragment to light
-	vec3 l = normalize(lightVector);
-	vec3 sd = normalize(spotDirection);
-	
-	float spotCos = dot(-l, sd);
-	if(spotCos <= spotCosCutOff) // inside the cone?
-		return vec3(0.0);
-
-	att = pow(spotCos, spotExp);
-	intensity = max(dot(n,l), 0.0) * att;
-
-	if (intensity <= 0.0)
+    if (!spotlight_mode)
         return vec3(0.0);
 
-	// Calculate diffuse component
-	vec3 diffuse = intensity * mat.diffuse.rgb;
+    float spotExp = 60.0;
 
-	vec3 h = normalize(l + e);
-	intSpec = max(dot(h, n), 0.0);
-	spec = mat.specular * pow(intSpec, mat.shininess) * att;
-
-	return diffuse + spec.rgb;
-}
-
-// Calculate the candles illumination
-vec3 calculateCandleLight(vec4 lightPos, vec3 n, vec3 e){
-	vec4 spec = vec4(0.0);
-	float intensity = 0.0f;
-	float intSpec = 0.0f;
-
-    // Vector from fragment to candle
     vec3 lightVector = lightPos.xyz - DataIn.fragPos;
-    float distanceToLight =  length(lightVector);
-
-    // Direction to candle
     vec3 l = normalize(lightVector);
+    vec3 sd = normalize(spotDirection);
 
-    // Diffuse
-	intensity = max(dot(n, l), 0.0);
+    float spotCos = dot(-l, sd);
+
+    if (spotCos <= spotCosCutOff)
+        return vec3(0.0);
+
+    float att = pow(spotCos, spotExp);
+    float intensity = max(dot(n, l), 0.0) * att;
+
     if (intensity <= 0.0)
         return vec3(0.0);
-    vec3 diffuse = intensity * mat.diffuse.rgb;
 
     // Specular
     vec3 h = normalize(l + e);
-    intSpec = max(dot(h, n), 0.0);
-    vec3 specular = mat.specular.rgb * pow(intSpec, mat.shininess);
+    float intSpec = max(dot(h, n), 0.0);
+    specular = mat.specular.rgb * pow(intSpec, mat.shininess) * att;
 
-	// Final Color
-    vec3 result = diffuse + specular;
-    return result;
+    return vec3(intensity);
+}
+
+// Calculate the candles illumination
+vec3 calculateCandleLight(vec4 lightPos, vec3 n, vec3 e, out vec3 specular)
+{
+    specular = vec3(0.0);
+
+    vec3 lightVector = lightPos.xyz - DataIn.fragPos;
+    vec3 l = normalize(lightVector);
+
+    float intensity = max(dot(n, l), 0.0);
+
+    if (intensity <= 0.0)
+        return vec3(0.0);
+
+    // Specular
+    vec3 h = normalize(l + e);
+    float intSpec = max(dot(h, n), 0.0);
+    specular = mat.specular.rgb * pow(intSpec, mat.shininess);
+
+    return vec3(intensity);
 }
 
 void main() {
@@ -155,49 +135,71 @@ void main() {
 
 	// Spotlight
 	vec3 spotlight = vec3(0.0);
+	vec3 spotlightSpecular = vec3(0.0);
 
 	if (spotlight_mode)	{
-		spotlight += calculateSpotLight(spotLightPos0, coneDir.xyz, n, e);
-		spotlight += calculateSpotLight(spotLightPos1, coneDir.xyz, n, e);
+		vec3 spec0;
+		vec3 spec1;
+
+		spotlight += calculateSpotLight(spotLightPos0, coneDir.xyz, n, e, spec0);
+		spotlight += calculateSpotLight(spotLightPos1, coneDir.xyz, n, e, spec1);
+		spotlightSpecular = spec0 + spec1;
 	}
 
 	// Candle Lights
 	vec3 candleLights = vec3(0.0);
+	vec3 candleSpecular = vec3(0.0);
+
 	if(candlesLightOn){
-		candleLights += calculateCandleLight(candlesLightPos0, n, e);
-		candleLights += calculateCandleLight(candlesLightPos1, n, e);
-		candleLights += calculateCandleLight(candlesLightPos2, n, e);
-		candleLights += calculateCandleLight(candlesLightPos3, n, e);
-		candleLights += calculateCandleLight(candlesLightPos4, n, e);
-		candleLights += calculateCandleLight(candlesLightPos5, n, e);
+		vec3 spec;
+
+		candleLights += calculateCandleLight(candlesLightPos0, n, e, spec);
+		candleSpecular += spec;
+
+		candleLights += calculateCandleLight(candlesLightPos1, n, e, spec);
+		candleSpecular += spec;
+
+		candleLights += calculateCandleLight(candlesLightPos2, n, e, spec);
+		candleSpecular += spec;
+
+		candleLights += calculateCandleLight(candlesLightPos3, n, e, spec);
+		candleSpecular += spec;
+
+		candleLights += calculateCandleLight(candlesLightPos4, n, e, spec);
+		candleSpecular += spec;
+
+		candleLights += calculateCandleLight(candlesLightPos5, n, e, spec);
+		candleSpecular += spec;
 	}
 
 	// Final Light
 	vec3 baseColor;
-	vec3 diffuseLight = globalLight + spotlight + candleLights;
+	vec3 lightIntensity = globalLight + spotlight + candleLights;
+	vec3 totalSpecular = globalSpecular + spotlightSpecular + candleSpecular;
 
 	// Textures
 	if(texMode == 0) //no texturing
-		baseColor = diffuseLight + mat.ambient.rgb;
+		 baseColor = mat.ambient.rgb + lightIntensity * mat.diffuse.rgb;
 
 	else if(texMode == 1) // modulate diffuse color with texel color
 	{
 		texel = texture(texmap2, DataIn.tex_coord);  // texel from lighwood.tga
-		baseColor = max(diffuseLight * texel.rgb, 0.07 * texel.rgb);
+		baseColor = mat.ambient.rgb * texel.rgb + lightIntensity * mat.diffuse.rgb * texel.rgb;
 	}
 	else if (texMode == 2) // diffuse color is replaced by texel color
 	{
 		texel = texture(texmap, DataIn.tex_coord);  // texel from stone.tga
-		baseColor = max(diffuseLight * texel.rgb, 0.07 * texel.rgb);
+		baseColor = 0.07 * texel.rgb + lightIntensity * texel.rgb;
 	}
 	else // multitexturing
 	{
 		texel = texture(texmap2, DataIn.tex_coord);  // texel from lighwood.tga
 		texel1 = texture(texmap1, DataIn.tex_coord);  // texel from checker.tga
-		baseColor = max(diffuseLight * texel.rgb * texel1.rgb, 0.07 * texel.rgb * texel1.rgb);
+		vec3 textureColor = texel.rgb * texel1.rgb;
+		baseColor = 0.07 * textureColor + lightIntensity * textureColor;
 	}
 
-	vec3 finalColor = baseColor + globalSpecular; 
+	vec3 finalColor = baseColor + totalSpecular;
 	colorOut = vec4(finalColor, mat.diffuse.a);
 
 	if (fogEnabled) {
@@ -214,9 +216,7 @@ void main() {
 			dist = length(DataIn.eye);
 		}
 
-		float fogFactor = (fogEnd - dist) / (fogEnd - fogStart);
-		fogFactor = clamp(fogFactor, 0.0, 1.0);
-
-		colorOut.rgb = mix(fogColor, colorOut.rgb, fogFactor);
+		float fogAmount = exp(-dist * 0.025);
+		colorOut.rgb = mix(fogColor, colorOut.rgb, fogAmount);
 	}
 }
