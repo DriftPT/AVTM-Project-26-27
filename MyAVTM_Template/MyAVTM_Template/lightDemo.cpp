@@ -77,6 +77,13 @@ const float ORTHO_SIZE = 100.0f;
 const float TOP_CAMERA_HEIGHT = 200.0f;     
 const float FOLLOW_CAMERA_DISTANCE = 25.0f;
 
+// Rear-view mirror (top-right corner)
+bool showRearMirror = true;
+const float MIRROR_WIDTH_RATIO = 0.28f;
+const float MIRROR_HEIGHT_RATIO = 0.28f;
+const int   MIRROR_MARGIN = 10;
+const float MIRROR_FOV = PERSPECTIVE_FOV;
+
 // Car starting position (start line)
 float CAR_START_X = 0;
 float CAR_START_Z = 0;
@@ -151,6 +158,25 @@ bool normalMapKey = TRUE;
 
 // .obj Visability
 bool objVisible = false;
+
+
+// ------------------------------------------------------------
+// Aux function to render a mesh using the current MODEL matrix.
+
+void drawMesh(int meshID, int texMode = 0)
+{
+	dataMesh data;
+
+	mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+	mu.computeNormalMatrix3x3();
+
+	data.meshID = meshID;
+	data.texMode = texMode;
+	data.vm = mu.get(gmu::VIEW_MODEL);
+	data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+	data.normal = mu.getNormalMatrix();
+	renderer.renderMesh(data);
+}
 
 /// ::::::::::::::::::::::::::::::::::::::::::::::::CALLBACK FUNCIONS:::::::::::::::::::::::::::::::::::::::::::::::::://///
 
@@ -422,24 +448,6 @@ void setMeshMaterial(int meshID, const CarMaterial &material)
 
 	renderer.myMeshes[meshID].mat.shininess =
 		material.shininess;
-}
-
-// ------------------------------------------------------------
-// Aux function to render a mesh using the current MODEL matrix.
-
-void drawMesh(int meshID, int texMode = 0)
-{
-	dataMesh data;
-
-	mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-	mu.computeNormalMatrix3x3();
-
-	data.meshID = meshID;
-	data.texMode = texMode;
-	data.vm = mu.get(gmu::VIEW_MODEL);
-	data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-	data.normal = mu.getNormalMatrix();
-	renderer.renderMesh(data);
 }
 
 
@@ -1354,6 +1362,124 @@ void updateCarHeadlights(float headlightsWorld[2][4], float coneDirWorld[4])
 }
 
 
+void renderRearMirror()
+{
+	if (!showRearMirror || !gameStarted || !trackingCamera)
+		return;
+
+	int mirrorW = (int)(WinX * MIRROR_WIDTH_RATIO);
+	int mirrorH = (int)(WinY * MIRROR_HEIGHT_RATIO);
+	int mirrorX = WinX - mirrorW - MIRROR_MARGIN;
+	int mirrorY = WinY - mirrorH - MIRROR_MARGIN;
+
+	const int FRAME_BORDER = 6;
+
+	int m_viewport[4];
+	glGetIntegerv(GL_VIEWPORT, m_viewport);
+
+	// --------------------------------------------------------
+	// Screen-space setup (moldura + máscara do stencil)
+
+	mu.pushMatrix(gmu::PROJECTION);
+	mu.loadIdentity(gmu::PROJECTION);
+	mu.ortho(m_viewport[0], m_viewport[0] + m_viewport[2] - 1, m_viewport[1], m_viewport[1] + m_viewport[3] - 1, -1, 1);
+
+	mu.pushMatrix(gmu::VIEW);
+	mu.loadIdentity(gmu::VIEW);
+	mu.pushMatrix(gmu::MODEL);
+
+	// --- Moldura: retângulo sólido, um pouco maior, por trás da máscara ---
+	mu.loadIdentity(gmu::MODEL);
+	mu.translate(gmu::MODEL, mirrorX + mirrorW * 0.5f, mirrorY + mirrorH * 0.5f, 0.0f);
+	mu.scale(gmu::MODEL, (float)(mirrorW + FRAME_BORDER * 1.5), (float)(mirrorH + FRAME_BORDER * 1.5), 1.0f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+	setMeshMaterial(MESH_CUBE, darkMaterial);
+	drawMesh(MESH_CUBE);
+
+	glEnable(GL_STENCIL_TEST);
+	glClear(GL_STENCIL_BUFFER_BIT);
+
+	// --- Máscara do stencil: retângulo do tamanho real do espelho ---
+	mu.loadIdentity(gmu::MODEL);
+	mu.translate(gmu::MODEL, mirrorX + mirrorW * 0.5f, mirrorY + mirrorH * 0.5f, 0.0f);
+	mu.scale(gmu::MODEL, (float)mirrorW, (float)mirrorH, 1.0f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+
+	glStencilFunc(GL_NEVER, 0x1, 0x1);
+	glStencilOp(GL_REPLACE, GL_KEEP, GL_KEEP);
+	drawMesh(MESH_CUBE);
+
+	mu.popMatrix(gmu::MODEL);
+	mu.popMatrix(gmu::VIEW);
+	mu.popMatrix(gmu::PROJECTION);
+
+	// --------------------------------------------------------
+	// Limpar profundidade e cor só na zona do espelho
+	glEnable(GL_SCISSOR_TEST);
+	glScissor(mirrorX, mirrorY, mirrorW, mirrorH);
+	glDepthMask(GL_TRUE);
+	glClearColor(fogColor[0], fogColor[1], fogColor[2], 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glDisable(GL_SCISSOR_TEST);
+
+	// --------------------------------------------------------
+	glStencilFunc(GL_EQUAL, 0x1, 0x1);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
+	glViewport(mirrorX, mirrorY, mirrorW, mirrorH);
+
+	// --------------------------------------------------------
+	// Câmara traseira
+	mu.pushMatrix(gmu::PROJECTION);
+	mu.loadIdentity(gmu::PROJECTION);
+	float mirrorRatio = (float)mirrorW / (float)mirrorH;
+	mu.perspective(MIRROR_FOV, mirrorRatio, 0.1f, 1000.0f);
+
+	mu.pushMatrix(gmu::VIEW);
+	mu.loadIdentity(gmu::VIEW);
+
+	float mirrorEyeY = carBaseY + 1.6f * CAR_SCALE;
+	float mirrorTargetX = carX - carDirection[0];
+	float mirrorTargetZ = carZ - carDirection[2];
+
+	mu.lookAt(carX, mirrorEyeY, carZ, mirrorTargetX, mirrorEyeY, mirrorTargetZ, 0, 1, 0);
+
+	mu.loadIdentity(gmu::MODEL);
+
+	// --------------------------------------------------------
+	// Luzes em eye coords para esta VIEW
+	renderer.activateRenderMeshesShaderProg();
+
+	float mGlobalLightEye[4];
+	mu.multMatrixPoint(gmu::VIEW, globalLightPos, mGlobalLightEye);
+	renderer.setGlobalLight(globalIllumination, mGlobalLightEye);
+
+	float mHeadlightsWorld[2][4], mConeDirWorld[4], mHeadlightsEye[2][4], mConeDirEye[4];
+	updateCarHeadlights(mHeadlightsWorld, mConeDirWorld);
+	for (int i = 0; i < 2; i++)
+		mu.multMatrixPoint(gmu::VIEW, mHeadlightsWorld[i], mHeadlightsEye[i]);
+	mu.multMatrixPoint(gmu::VIEW, mConeDirWorld, mConeDirEye);
+	renderer.setSpotLights(carHeadlights, mHeadlightsEye, mConeDirEye, spotCosCutOff);
+
+	float mCandlesEye[6][4];
+	for (int i = 0; i < 6; i++)
+		mu.multMatrixPoint(gmu::VIEW, candles[i], mCandlesEye[i]);
+	renderer.setCandlesLights(candlesIllumination, mCandlesEye);
+
+	renderer.setFog(fogEnabled, fogColor);
+
+	// --------------------------------------------------------
+	env.render(renderer, mu);
+	env.renderTranslucent(renderer, mu);
+
+	// --------------------------------------------------------
+	mu.popMatrix(gmu::VIEW);
+	mu.popMatrix(gmu::PROJECTION);
+
+	glViewport(m_viewport[0], m_viewport[1], m_viewport[2], m_viewport[3]);
+	glStencilFunc(GL_ALWAYS, 0x0, 0x1);
+	glDisable(GL_STENCIL_TEST);
+}
 
 // ------------------------------------------------------------
 //
@@ -1459,7 +1585,6 @@ void renderSim(void)
 		drawCar();
 	}
 	drawCarAABB();
-	env.renderTranslucent(renderer, mu); // orbs por último
 
 	// Render text (bitmap fonts) in screen coordinates. So use ortoghonal projection with viewport coordinates.
 	// Each glyph quad texture needs just one byte color channel: 0 in background and 1 for the actual character pixels. Use it for alpha blending
@@ -1497,6 +1622,9 @@ void renderSim(void)
 			mu.popMatrix(gmu::MODEL);
 		}
 	}
+
+	env.renderTranslucent(renderer, mu); // orbs por último
+	renderRearMirror();
 
 	if (fontLoaded)
 	{
@@ -1672,6 +1800,12 @@ void processKeys(unsigned char key, int xx, int yy)
 	case 'f':
 		togglefog();
 		printf("Fog [%d]\n", fogEnabled);
+		break;
+
+	case 'M':
+	case 'm':
+		showRearMirror = !showRearMirror;
+		printf("Rear View Mirror [%d]\n", showRearMirror);
 		break;
 
 	case 'O':
@@ -1966,7 +2100,7 @@ int main(int argc, char **argv)
 
 	//  GLUT initialization
 	glutInit(&argc, argv);
-	glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA | GLUT_MULTISAMPLE);
+	glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA | GLUT_STENCIL | GLUT_MULTISAMPLE);
 
 	glutInitContextVersion(4, 3);
 	glutInitContextProfile(GLUT_CORE_PROFILE);
@@ -2003,6 +2137,7 @@ int main(int argc, char **argv)
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_MULTISAMPLE);
 	glClearColor(0.5f, 0.6f, 0.7f, 1.0f);
+	glClearStencil(0x0);
 
 	printf("Vendor: %s\n", glGetString(GL_VENDOR));
 	printf("Renderer: %s\n", glGetString(GL_RENDERER));
