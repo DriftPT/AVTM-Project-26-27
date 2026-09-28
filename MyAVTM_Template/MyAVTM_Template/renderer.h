@@ -39,6 +39,8 @@ public:
   Renderer();
   ~Renderer();
 
+  bool forceConstantShading = false;
+
   bool truetypeInit(const std::string &ttf_filepath);  //Initialization of TRUETYPE  for text rendering
 
   //Setup render meshes GLSL program

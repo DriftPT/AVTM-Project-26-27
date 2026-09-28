@@ -191,15 +191,23 @@ void main() {
 		texel = texture(texmap, DataIn.tex_coord);  // texel from stone.tga
 		baseColor = 0.07 * texel.rgb + lightIntensity * texel.rgb;
 	}
-	else // multitexturing
+	else if (texMode == 3) // multitexturing
 	{
 		texel = texture(texmap2, DataIn.tex_coord);  // texel from lighwood.tga
 		texel1 = texture(texmap1, DataIn.tex_coord);  // texel from checker.tga
 		vec3 textureColor = texel.rgb * texel1.rgb;
 		baseColor = 0.07 * textureColor + lightIntensity * textureColor;
 	}
+	else if (texMode == 4) // constant shading (sombras planares)
+	{
+		baseColor = vec3(0.5, 0.5, 0.5);
+	}
+	else // valor de texMode inesperado - mostra magenta para ser óbvio que há um bug
+	{
+		baseColor = vec3(1.0, 0.0, 1.0);
+	}
 
-	vec3 finalColor = baseColor + totalSpecular;
+	vec3 finalColor = (texMode == 4) ? baseColor : baseColor + totalSpecular;
 	colorOut = vec4(finalColor, mat.diffuse.a);
 
 	if (fogEnabled) {
@@ -217,6 +225,9 @@ void main() {
 		}
 
 		float fogAmount = exp(-dist * 0.025);
-		colorOut.rgb = mix(fogColor, colorOut.rgb, fogAmount);
+		if (texMode == 4)
+			colorOut.rgb = mix(vec3(1.0), colorOut.rgb, fogAmount); // sombra desvanece para "neutro", não para o céu
+		else
+			colorOut.rgb = mix(fogColor, colorOut.rgb, fogAmount);
 	}
 }

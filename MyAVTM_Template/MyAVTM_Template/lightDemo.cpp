@@ -1567,6 +1567,49 @@ void drawObjectsAboveRoad(bool mirrored)
 	env.renderTranslucent(renderer, mu); // orbs por último
 }
 
+// Tudo o que deve ter sombras (para as orbs nao terem)
+void drawShadowCasters()
+{
+	drawCandles();
+	env.renderObjects(renderer, mu);
+	drawCarModel();
+}
+
+
+// PRÉ-CONDIÇÃO: stencil já tem mesa=1/estrada=2 marcados (chamar só de dentro de renderSceneWithReflections())
+void renderShadows()
+{
+	const float planeY = env.getRoadSurfaceY();
+
+	// Plano horizontal y = planeY, em coordenadas do mundo: (0,1,0,-planeY)
+	GLfloat plane[4] = { 0.0f, 1.0f, 0.0f, -planeY };
+
+	// Luz que projeta a sombra: a global (direcional)
+	float shadowMat[16];
+	mu.shadow_matrix(shadowMat, plane, globalLightPos);
+
+	// Desenha onde o stencil marca mesa OU estrada (>=1)
+	glStencilFunc(GL_LEQUAL, 0x1, 0xFF);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_ZERO); // ao desenhar aqui, "consome" a marca (evita redesenhar)
+
+	glDisable(GL_DEPTH_TEST); // força a sombra a aparecer mesmo achatada contra o chão
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_DST_COLOR, GL_ZERO); // escurece multiplicativamente o que já lá estiver
+
+	renderer.forceConstantShading = true;
+
+	mu.pushMatrix(gmu::MODEL);
+	mu.multMatrix(gmu::MODEL, shadowMat);
+	drawShadowCasters();
+	mu.popMatrix(gmu::MODEL);
+
+	renderer.forceConstantShading = false;
+
+	glDisable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
+}
+
+
 void renderSceneWithReflections()
 {
 	const float  planeY  = env.getRoadSurfaceY();          // Topo da Estrada
@@ -1609,6 +1652,9 @@ void renderSceneWithReflections()
 
 	glDepthMask(GL_TRUE);  // Restaura a escrita no Depth Buffer (REVER N PERCEBI TODO:ELEMINAR COMMENT)
 	glDisable(GL_BLEND);
+
+	renderShadows(); // SOMBRAS PLANARES (reaproveita as marcas de stencil: mesa=1, estrada=2)
+
 	// Repõe o stencil buffer para 0, para não afetar o resto da cena
 	glStencilFunc(GL_ALWAYS, 0x0, 0xFF);
 	glDisable(GL_STENCIL_TEST);

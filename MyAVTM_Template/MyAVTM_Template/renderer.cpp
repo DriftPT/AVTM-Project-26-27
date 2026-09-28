@@ -314,7 +314,7 @@ void Renderer::renderMesh(const dataMesh& data) {
     glUniform1f(loc, myMeshes[data.meshID].mat.shininess);
 
     // Render mesh
-    glUniform1i(texMode_loc, data.texMode);
+    glUniform1i(texMode_loc, forceConstantShading ? 4 : data.texMode);
 
     glBindVertexArray(myMeshes[data.meshID].vao);
     glDrawElements(myMeshes[data.meshID].type, myMeshes[data.meshID].numIndexes, GL_UNSIGNED_INT, nullptr);
@@ -386,7 +386,7 @@ void Renderer::renderMeshFromAssimp(const dataMesh& data) {
     }
 
     // Render mesh
-    glUniform1i(texMode_loc, data.texMode);
+    glUniform1i(texMode_loc, forceConstantShading ? 4 : data.texMode);
 
     glBindVertexArray(myMeshes[data.meshID].vao);
     glDrawElements(myMeshes[data.meshID].type, myMeshes[data.meshID].numIndexes, GL_UNSIGNED_INT, nullptr);
