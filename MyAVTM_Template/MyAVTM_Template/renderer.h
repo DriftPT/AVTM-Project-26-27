@@ -2,7 +2,7 @@
 // The code comes with no warranties, use it at your own risk.
 // You may use it, or parts of it, wherever you want.
 // 
-// Author: João Madeiras Pereira
+// Author: Joï¿½o Madeiras Pereira
 //
 
 #include <vector>
@@ -87,12 +87,13 @@ private:
   // Text font rasterizer GLSL program
   GLuint textProgram;
 
-  GLint model_loc, view_loc, pvm_loc, vm_loc, normal_loc, lpos_loc, texMode_loc;
+  GLint model_loc = -1, view_loc = -1, pvm_loc = -1, vm_loc = -1,
+      normal_loc = -1, lpos_loc = -1, texMode_loc = -1;
   GLint tex_loc[MAX_TEXTURES];
 
-  GLboolean normalMap_loc;
-  GLboolean specularMap_loc;
-  GLint diffMapCount_loc;
+  GLint normalMap_loc = -1;
+  GLint specularMap_loc = -1;
+  GLint diffMapCount_loc = -1;
 
   //render font GLSL program variable locations and VAO
   GLint fontPvm_loc, textColor_loc;

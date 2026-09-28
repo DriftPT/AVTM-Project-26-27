@@ -1,6 +1,5 @@
 /*
-* Environment.cpp - Implementa a classe Environment, que representa
-* o ambiente de jogo, incluindo a mesa, estrada e cheerios.
+* Environment.cpp - Implementa a classe Environment, que representa o ambiente de jogo.
 */
 
 #include <cstring>
@@ -794,6 +793,7 @@ void Environment::resolveOrangeCollision(Orange& orange, const AABB& box) {
     return;
 }
 
+//TODO: REVER
 // Resolve a colisão entre duas laranjas
 void Environment::resolveOrangeOrangeCollision(Orange& a, Orange& b) {
     float dx = b.x - a.x;
