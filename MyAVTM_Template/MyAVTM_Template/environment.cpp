@@ -401,8 +401,13 @@ void Environment::updatePointOrbs(float deltaTime) {
 
 // ------------------------ Render ------------------------
 void Environment::render(Renderer& renderer, gmu& mu) {
-    drawTable(renderer, mu);
-    drawRoad(renderer, mu);
+    drawTable(renderer, mu, 1.0f);
+    drawRoad(renderer, mu, 1.0f);
+    renderObjects(renderer, mu);
+}
+void Environment::renderTable(Renderer& renderer, gmu& mu, float alpha) { drawTable(renderer, mu, alpha); }
+void Environment::renderRoad(Renderer& renderer, gmu& mu, float alpha) { drawRoad(renderer, mu, alpha); }
+void Environment::renderObjects(Renderer& renderer, gmu& mu) {
     drawFinishLine(renderer, mu);
     drawCheerios(renderer, mu);
     drawButters(renderer, mu);
@@ -415,13 +420,13 @@ void Environment::renderTranslucent(Renderer& renderer, gmu& mu) {
     drawPointOrbs(renderer, mu);
 }
 
-void Environment::drawTable(Renderer& renderer, gmu& mu) {
+void Environment::drawTable(Renderer& renderer, gmu& mu, float alpha) {
 	renderer.setTexUnit(1, 2); // TU1 = texmap1 -> lightwood.tga
 	renderer.setTexUnit(2, 3); // TU2 = texmap2 -> table.jpg
 
     // Material da mesa aplicado ao Cubo (Mesh 0)
     float amb[] = { 0.25f, 0.25f, 0.25f, 1.0f };
-    float diff[] = { 0.9f, 0.9f, 0.9f, 1.0f };
+    float diff[] = { 0.9f, 0.9f, 0.9f, alpha };
     float spec[] = { 0.2f, 0.2f, 0.2f, 1.0f };
     memcpy(renderer.myMeshes[0].mat.ambient, amb, 4 * sizeof(float));
     memcpy(renderer.myMeshes[0].mat.diffuse, diff, 4 * sizeof(float));
@@ -447,12 +452,12 @@ void Environment::drawTable(Renderer& renderer, gmu& mu) {
     mu.popMatrix(gmu::MODEL);
 }
 
-void Environment::drawRoad(Renderer& renderer, gmu& mu) {
+void Environment::drawRoad(Renderer& renderer, gmu& mu, float alpha) {
     renderer.setTexUnit(2, 4);
 
     // Configurar material da pista no Mesh 0
     float amb[] = { 0.25f, 0.25f, 0.25f, 1.0f };
-    float diff[] = { 0.9f,  0.9f,  0.9f,  1.0f };
+    float diff[] = { 0.9f,  0.9f,  0.9f,  alpha };
     float spec[] = { 0.2f,  0.2f,  0.2f,  1.0f };
     memcpy(renderer.myMeshes[0].mat.ambient, amb, 4 * sizeof(float));
     memcpy(renderer.myMeshes[0].mat.diffuse, diff, 4 * sizeof(float));

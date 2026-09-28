@@ -322,6 +322,11 @@ bool wasHittingCheerio = false;
 bool wasHittingButter  = false;
 
 // ------------------------------------------------------------
+// Reflections
+const float ROAD_REFLECTION_ALPHA = 0.85f; // menor = reflexo mais forte
+const float TABLE_REFLECTION_ALPHA = 0.7f;
+
+// ------------------------------------------------------------
 // Car keyboard state
 
 bool keyW = false;
@@ -1361,7 +1366,10 @@ void updateCarHeadlights(float headlightsWorld[2][4], float coneDirWorld[4])
 	coneDirWorld[3] = 0.0f;
 }
 
-
+// ------------------------------------------------------------
+//
+// Render stufff
+//
 void renderRearMirror()
 {
 	if (!showRearMirror || !gameStarted || !trackingCamera)
@@ -1481,11 +1489,135 @@ void renderRearMirror()
 	glDisable(GL_STENCIL_TEST);
 }
 
-// ------------------------------------------------------------
-//
-// Render stufff
-//
+// Envia as luzes em eye space. Se mirrored, espelha-as em relação ao plano da estrada
+void setSceneLights(bool mirrored)
+{
+	float planeY = env.getRoadSurfaceY();
 
+	// Global (direcional, w = 0): basta inverter o Y da direção
+	float gWorld[4] = { globalLightPos[0], globalLightPos[1], globalLightPos[2], globalLightPos[3] };
+	if (mirrored) gWorld[1] = -gWorld[1];
+	float  gloablLightPosEye[4];
+	mu.multMatrixPoint(gmu::VIEW, gWorld,  gloablLightPosEye);
+	renderer.setGlobalLight(globalIllumination, gloablLightPosEye);
+
+	// Faróis
+	float carHeadlightsWorld[2][4], coneDirWorld[4], carHeadlightsEye[2][4], coneDirEye[4];
+	updateCarHeadlights(carHeadlightsWorld, coneDirWorld);
+	if (mirrored) {
+		for (int i = 0; i < 2; i++) carHeadlightsWorld[i][1] = 2.0f * planeY - carHeadlightsWorld[i][1];
+		coneDirWorld[1] = -coneDirWorld[1];
+	}
+	for (int i = 0; i < 2; i++) mu.multMatrixPoint(gmu::VIEW, carHeadlightsWorld[i], carHeadlightsEye[i]);
+	mu.multMatrixPoint(gmu::VIEW, coneDirWorld, coneDirEye);
+	renderer.setSpotLights(carHeadlights, carHeadlightsEye, coneDirEye, spotCosCutOff);
+
+	// Velas
+	float candlesEye[6][4];
+	for (int i = 0; i < 6; i++) {
+		float p[4] = { candles[i][0], candles[i][1], candles[i][2], 1.0f };
+		if (mirrored) p[1] = 2.0f * planeY - p[1];
+		mu.multMatrixPoint(gmu::VIEW, p, candlesEye[i]);
+	}
+	renderer.setCandlesLights(candlesIllumination, candlesEye);
+}
+
+// Carro
+void drawCarModel()
+{
+	if (!objVisible) {
+		drawCar();
+		return;
+	}
+
+	dataMesh data;
+	for (unsigned int n = 0; n < renderer.myMeshes.size(); ++n) {
+		mu.pushMatrix(gmu::MODEL);
+
+		mu.multMatrix(gmu::MODEL, renderer.myMeshes[n].transform);
+		mu.translate(gmu::MODEL, carX, carBaseY, carZ);
+		mu.rotate(gmu::MODEL, -90.0f, 1.0f, 0.0f, 0.0f);
+		mu.rotate(gmu::MODEL, carAngle, 0.0f, 0.0f, 1.0f);
+		mu.scale(gmu::MODEL, scaleFactor * 4.5, scaleFactor * 4.5, scaleFactor * 4.5);
+
+		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+		mu.computeNormalMatrix3x3();
+
+		data.meshID = n;
+		data.texMode = 0;
+		data.model = mu.get(gmu::MODEL);
+		data.view = mu.get(gmu::VIEW);
+		data.vm = mu.get(gmu::VIEW_MODEL);
+		data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+		data.normal = mu.getNormalMatrix();
+		data.normalMapKey = normalMapKey;
+
+		renderer.renderMeshFromAssimp(data);
+		mu.popMatrix(gmu::MODEL);
+	}
+}
+
+// Tudo o que está em cima da estrada/mesa (o que reflete)
+void drawObjectsAboveRoad(bool mirrored)
+{
+	drawCandles();
+	env.renderObjects(renderer, mu);
+	drawCarModel();
+	if (!mirrored) drawCarAABB();
+	env.renderTranslucent(renderer, mu); // orbs por último
+}
+
+void renderSceneWithReflections()
+{
+	const float  planeY  = env.getRoadSurfaceY();          // Topo da Estrada
+
+	// Stencil: mesa = 1,  estrada = 2
+	glEnable(GL_STENCIL_TEST);
+	glStencilOp(GL_REPLACE, GL_KEEP, GL_KEEP);
+	glStencilFunc(GL_NEVER, 0x1, 0xFF);
+	env.renderTable(renderer, mu); // Escreve 1 no stencil buffer onde se desenha a mesa
+	glStencilFunc(GL_NEVER, 0x2, 0xFF);
+	env.renderRoad(renderer, mu); // Escreve 2 no stencil buffer onde se desenha a estrada
+
+	// renderiza reflexos onde o stencil buffer é maior que 1 (geometria da mesa e estrada)
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+	glStencilFunc(GL_LEQUAL, 0x1, 0xFF);
+	setSceneLights(true);
+
+	mu.pushMatrix(gmu::MODEL);
+	mu.translate(gmu::MODEL, 0.0f, planeY, 0.0f);
+	mu.scale(gmu::MODEL, 1.0f, -1.0f, 1.0f);
+	mu.translate(gmu::MODEL, 0.0f, -planeY, 0.0f);
+	glCullFace(GL_FRONT);
+	drawObjectsAboveRoad(true);
+	glCullFace(GL_BACK);
+	mu.popMatrix(gmu::MODEL);
+
+	// Repõe as luzes na sua posição normal
+	setSceneLights(false);
+
+	// Mesa e estrada semi-transparentes (blending) por cima do reflexo
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glDepthMask(GL_FALSE); // não bloquear a escrita no Depth Buffer  (REVER N PERCEBI TODO:ELEMINAR COMMENT)
+
+	glStencilFunc(GL_EQUAL, 0x1, 0xFF);
+	env.renderTable(renderer, mu, TABLE_REFLECTION_ALPHA);
+
+	glStencilFunc(GL_EQUAL, 0x2, 0xFF);
+	env.renderRoad(renderer, mu, ROAD_REFLECTION_ALPHA);
+
+	glDepthMask(GL_TRUE);  // Restaura a escrita no Depth Buffer (REVER N PERCEBI TODO:ELEMINAR COMMENT)
+	glDisable(GL_BLEND);
+	// Repõe o stencil buffer para 0, para não afetar o resto da cena
+	glStencilFunc(GL_ALWAYS, 0x0, 0xFF);
+	glDisable(GL_STENCIL_TEST);
+
+	// Desenha os objetos acima da estrada/mesa
+	drawObjectsAboveRoad(false);
+}
+
+// Render the simulation scene
 void renderSim(void)
 {
 	FrameCount++;
@@ -1513,7 +1645,7 @@ void renderSim(void)
 		if (scoreChangeTimer > 0.0f) { scoreChangeTimer -= dt; }
 	}
 
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
 	renderer.activateRenderMeshesShaderProg(); // use the required GLSL program to draw the meshes with illumination
 
@@ -1537,93 +1669,22 @@ void renderSim(void)
 		mu.lookAt(camX, camY, camZ, 0, 0, 0, 0, 1, 0);
 	}
 
-
-	// float lposAux[4];
-	// mu.multMatrixPoint(gmu::VIEW, lightPos, lposAux);   //lightPos definido em World Coord so is converted to eye space
-	// renderer.setLightPos(lposAux);
-
 	// ----------------------------
-	// Lights Settings
+	// Lights + Fog + Scene
 	// ----------------------------
-
-	float gloablLightPosEye[4];
-	float carHeadlightsWorld[2][4];
-	float carHeadlightsEye[2][4];
-	float coneDirWorld[4];
-	float coneDirEye[4];
-	float candlesEye[6][4];
-
-	// Global Illumination settings in eye coordinates
-	mu.multMatrixPoint(gmu::VIEW, globalLightPos, gloablLightPosEye);
-	renderer.setGlobalLight(globalIllumination, gloablLightPosEye);
-
-	// Spotlight settings in eye coordinates
-	updateCarHeadlights(carHeadlightsWorld, coneDirWorld);
-
-	for (int i = 0; i < 2; i++) {
-		mu.multMatrixPoint(gmu::VIEW, carHeadlightsWorld[i], carHeadlightsEye[i]);
-	}
-	mu.multMatrixPoint(gmu::VIEW, coneDirWorld, coneDirEye);
-
-	renderer.setSpotLights(carHeadlights, carHeadlightsEye, coneDirEye, spotCosCutOff);
-
-	// Candles settigs in eye coordinates
-	for (int i = 0; i < 6; i++) {
-		mu.multMatrixPoint(gmu::VIEW, candles[i], candlesEye[i]);
-	}
-	renderer.setCandlesLights(candlesIllumination, candlesEye);
-
-	drawCandles();
-
-	// Fog settings
+	setSceneLights(false);
 	renderer.setFog(fogEnabled, fogColor);
 
-	// Desenha mesa / estrada / linha de meta / cheerios / manteigas / laranjas
-	env.render(renderer, mu);
-	// Draw the car
-	if (!objVisible) {
-		drawCar();
-	}
-	drawCarAABB();
-
-	// Render text (bitmap fonts) in screen coordinates. So use ortoghonal projection with viewport coordinates.
-	// Each glyph quad texture needs just one byte color channel: 0 in background and 1 for the actual character pixels. Use it for alpha blending
-	// text to be rendered in last place to be in front of everything
-
-	dataMesh data;
-
-	if (objVisible)
+	if (camY > env.getRoadSurfaceY())
 	{
-		// draw all meshes for the OBJ
-		for (unsigned int n = 0; n < renderer.myMeshes.size(); ++n) {
-
-			mu.pushMatrix(gmu::MODEL);
-
-			mu.multMatrix(gmu::MODEL, renderer.myMeshes[n].transform);
-			mu.translate(gmu::MODEL, carX, carBaseY, carZ);
-			mu.rotate(gmu::MODEL, -90.0f, 1.0f, 0.0f, 0.0f);
-			mu.rotate(gmu::MODEL, carAngle, 0.0f, 0.0f, 1.0f);
-			mu.scale(gmu::MODEL,scaleFactor*4.5,scaleFactor*4.5,scaleFactor*4.5);
-
-			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-			mu.computeNormalMatrix3x3();
-
-			data.meshID = n;
-			data.texMode = 0;
-			data.model = mu.get(gmu::MODEL);
-			data.view = mu.get(gmu::VIEW);
-			data.vm = mu.get(gmu::VIEW_MODEL);
-			data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-			data.normal = mu.getNormalMatrix();
-			data.normalMapKey = normalMapKey;
-
-			renderer.renderMeshFromAssimp(data);
-
-			mu.popMatrix(gmu::MODEL);
-		}
+		renderSceneWithReflections();
+	} 
+	else
+	{
+		env.renderTable(renderer, mu, 1.0f);
+		env.renderRoad(renderer, mu, 1.0f);
+		drawObjectsAboveRoad(false);
 	}
-
-	env.renderTranslucent(renderer, mu); // orbs por último
 	renderRearMirror();
 
 	if (fontLoaded)

@@ -20,7 +20,7 @@ public:
 
         // Circuito
         float roadWidth = 25.0f;     // largura de cada bloco de estrada
-        float roadHeight = 0.08f;   // espessura da estrada (fica em cima da mesa)
+        float roadHeight = 0.02f;   // espessura da estrada (fica em cima da mesa)
         float roadScale = 3.0f;     // fator de escala da estrada
 
         // Cheerios (margens)
@@ -130,6 +130,9 @@ public:
 
     void init(Renderer& renderer, const Config& config = Config());
     void update(float deltaTime);
+    void renderTable(Renderer& renderer, gmu& mu, float alpha = 1.0f);
+    void renderRoad(Renderer& renderer, gmu& mu, float alpha = 1.0f);
+    void renderObjects(Renderer& renderer, gmu& mu);
     void render(Renderer& renderer, gmu& mu);
     void renderTranslucent(Renderer& renderer, gmu& mu);
 
@@ -184,8 +187,8 @@ private:
     void resetOrange(Orange& orange);
     void updatePointOrbs(float deltaTime);
 
-    void drawTable(Renderer& renderer, gmu& mu);
-    void drawRoad(Renderer& renderer, gmu& mu);
+    void drawTable(Renderer& renderer, gmu& mu, float alpha = 1.0f);
+    void drawRoad(Renderer& renderer, gmu& mu, float alpha = 1.0f);
     void drawFinishLine(Renderer& renderer, gmu& mu);
     void drawCheerios(Renderer& renderer, gmu& mu);
     void drawOranges(Renderer& renderer, gmu& mu);
