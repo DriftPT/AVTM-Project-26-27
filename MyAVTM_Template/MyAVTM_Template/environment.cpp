@@ -698,7 +698,7 @@ void Environment::drawPointOrbs(Renderer& renderer, gmu& mu) {
 
 // ------------------------ Bounding Boxes and Collisions ------------------------
 
-void Environment::drawBox(Renderer& renderer, gmu& mu, const AABB& b) {//TODO: Remover
+void Environment::drawBox(Renderer& renderer, gmu& mu, const AABB& b) {
     dataMesh data;
     data.meshID = 0;   // cubo
     data.texMode = 0;  // só material
@@ -718,7 +718,7 @@ void Environment::drawBox(Renderer& renderer, gmu& mu, const AABB& b) {//TODO: R
     mu.popMatrix(gmu::MODEL);
 }
 
-void Environment::drawBoundingBoxes(Renderer& renderer, gmu& mu) {//TODO: Remover
+void Environment::drawBoundingBoxes(Renderer& renderer, gmu& mu) {
     // Verde puro: com diffuse/specular a 0, o shader devolve o ambient
     float amb[]  = { 0.0f, 1.0f, 0.0f, 1.0f };
     float zero[] = { 0.0f, 0.0f, 0.0f, 1.0f };
@@ -761,7 +761,7 @@ void Environment::hitPointOrb(int id) {
     pointOrbs[id].respawnTimer = cfg.orbRespawnTime;
 }
 
-//TODO: REVER
+
 // Resolve a colisão de uma laranja contra qualquer obstáculo AABB
 void Environment::resolveOrangeCollision(Orange& orange, const AABB& box) {
 
@@ -798,7 +798,6 @@ void Environment::resolveOrangeCollision(Orange& orange, const AABB& box) {
     return;
 }
 
-//TODO: REVER
 // Resolve a colisão entre duas laranjas
 void Environment::resolveOrangeOrangeCollision(Orange& a, Orange& b) {
     float dx = b.x - a.x;

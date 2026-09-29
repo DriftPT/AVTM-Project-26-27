@@ -73,8 +73,8 @@ float r = 25.0f;
 bool orthoProj = false;
 bool perspProj = true;
 const float PERSPECTIVE_FOV = 53.13f;
-const float ORTHO_SIZE = 100.0f;
-const float TOP_CAMERA_HEIGHT = 200.0f;
+const float ORTHO_SIZE = 75.0f;           
+const float TOP_CAMERA_HEIGHT = 150.0f;     
 const float FOLLOW_CAMERA_DISTANCE = 25.0f;
 
 // Rear-view mirror (top-right corner)
@@ -131,7 +131,6 @@ bool carHeadlights = false;
 float localHeadlights[2][4] = {
 	{-1.0f, 1.0f, 2.71f, 1.0f},
 	{1.0f, 1.0f, 2.71f, 1.0f}};
-float coneDir[4] = {0.0f, -0.0f, -1.0f, 0.0f};
 float spotCosCutOff = 0.93;
 
 // Fog
@@ -347,10 +346,9 @@ void changeSize(int w, int h)
 }
 
 // ------------------------------------------------------------
-//
-// Update Projection Function
-//
+// Camera view 
 
+// Update Projection Function
 void updateProjection()
 {
 
@@ -362,39 +360,33 @@ void updateProjection()
 	if (perspProj)
 	{
 		mu.loadIdentity(gmu::PROJECTION);
-		mu.perspective(PERSPECTIVE_FOV, ratio, 0.1f, 1000.0f);
+		mu.perspective(PERSPECTIVE_FOV, ratio, 0.1f, 1000.0f); // mu.perspective(fov, ratio, near, far)
 	}
 	else if (orthoProj)
 	{
 		mu.loadIdentity(gmu::PROJECTION);
-		mu.ortho(-ORTHO_SIZE * ratio, ORTHO_SIZE * ratio, -ORTHO_SIZE, ORTHO_SIZE, -300.0f, 300.0f);
+		mu.ortho(-ORTHO_SIZE * ratio, ORTHO_SIZE * ratio, -ORTHO_SIZE, ORTHO_SIZE, -300.0f, 300.0f); // mu.ortho(left, right, bottom, top, near, far)
 	}
 	glutPostRedisplay(); // viewport refresh
 }
 
-// ------------------------------------------------------------
-//
-// Set Camera Over Function
-//
 
+// Set Camera Over Function
 void static setCameraOver()
 {
 	alpha = 0.0f;
 	_beta = 90.0f; // Over Camera Spherical Coordinates
 	r = TOP_CAMERA_HEIGHT;
-	camX = r * sin(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
-	camZ = r * cos(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
-	camY = r * sin(_beta * 3.14f / 180.0f);
+	camX = r * sin(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f); // =0
+	camZ = r * cos(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f); // =0
+	camY = r * sin(_beta * 3.14f / 180.0f); // =TOP_CAMERA_HEIGHT
 }
 
-// ------------------------------------------------------------
-//
-// Set Camera Behind the car Function
-//
 
+// Set Camera Behind the car Function
 void static setCameraBehind()
 {
-	alpha = 180.0f + carAngle + cameraOrientation;
+	alpha = 180.0f + carAngle + cameraOrientation; 
 	_beta = 20.0f; // Behind Camera Spherical Coordinates - alpha horizontal rotation - beta vertical rotation
 	camX = carX + r * sin(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
 	camZ = carZ + r * cos(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
@@ -1362,7 +1354,7 @@ void renderRearMirror()
 	if (!showRearMirror || !gameStarted || !trackingCamera)
 		return;
 
-	int mirrorW = (int)(WinX * MIRROR_WIDTH_RATIO);
+	int mirrorW = (int)(WinX * MIRROR_WIDTH_RATIO); // 28% da largura da janela
 	int mirrorH = (int)(WinY * MIRROR_HEIGHT_RATIO);
 	int mirrorX = WinX - mirrorW - MIRROR_MARGIN;
 	int mirrorY = WinY - mirrorH - MIRROR_MARGIN;
@@ -1383,9 +1375,9 @@ void renderRearMirror()
 	mu.loadIdentity(gmu::VIEW);
 	mu.pushMatrix(gmu::MODEL);
 
-	// --- Moldura: retângulo sólido, um pouco maior, por trás da máscara ---
+	// Moldura: retângulo sólido, um pouco maior, por trás da máscara 
 	mu.loadIdentity(gmu::MODEL);
-	mu.translate(gmu::MODEL, mirrorX + mirrorW * 0.5f, mirrorY + mirrorH * 0.5f, 0.0f);
+	mu.translate(gmu::MODEL, mirrorX + mirrorW * 0.5f, mirrorY + mirrorH * 0.5f, 0.0f); // Move o centro do cubo para o centro do espelho
 	mu.scale(gmu::MODEL, (float)(mirrorW + FRAME_BORDER * 1.5), (float)(mirrorH + FRAME_BORDER * 1.5), 1.0f);
 	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
 	setMeshMaterial(MESH_CUBE, darkMaterial);
@@ -1394,12 +1386,13 @@ void renderRearMirror()
 	glEnable(GL_STENCIL_TEST);
 	glClear(GL_STENCIL_BUFFER_BIT);
 
-	// --- Máscara do stencil: retângulo do tamanho real do espelho ---
+	// Máscara do stencil: retângulo do tamanho real do espelho
 	mu.loadIdentity(gmu::MODEL);
 	mu.translate(gmu::MODEL, mirrorX + mirrorW * 0.5f, mirrorY + mirrorH * 0.5f, 0.0f);
 	mu.scale(gmu::MODEL, (float)mirrorW, (float)mirrorH, 1.0f);
 	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
 
+	// Marca o retângulo do espelho no stencil buffer (valor 1) sem desenhar cor nem profundidade
 	glStencilFunc(GL_NEVER, 0x1, 0x1);
 	glStencilOp(GL_REPLACE, GL_KEEP, GL_KEEP);
 	drawMesh(MESH_CUBE);
@@ -1418,11 +1411,10 @@ void renderRearMirror()
 	glDisable(GL_SCISSOR_TEST);
 
 	// --------------------------------------------------------
-	glStencilFunc(GL_EQUAL, 0x1, 0x1);
+	glStencilFunc(GL_EQUAL, 0x1, 0x1);      // agora só passa onde stencil == 1 (dentro do espelho)
 	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
 
-	glViewport(mirrorX, mirrorY, mirrorW, mirrorH);
-
+	glViewport(mirrorX, mirrorY, mirrorW, mirrorH); // a cena vai ser desenhada neste retângulo
 	// --------------------------------------------------------
 	// Câmara traseira
 	mu.pushMatrix(gmu::PROJECTION);
@@ -1434,7 +1426,7 @@ void renderRearMirror()
 	mu.loadIdentity(gmu::VIEW);
 
 	float mirrorEyeY = carBaseY + 1.6f * CAR_SCALE;
-	float mirrorTargetX = carX - carDirection[0];
+	float mirrorTargetX = carX - carDirection[0]; // ponto para onde olha, 1 unidade atrás do carro
 	float mirrorTargetZ = carZ - carDirection[2];
 
 	mu.lookAt(carX, mirrorEyeY, carZ, mirrorTargetX, mirrorEyeY, mirrorTargetZ, 0, 1, 0);
@@ -1463,11 +1455,11 @@ void renderRearMirror()
 
 	renderer.setFog(fogEnabled, fogColor);
 
-	// --------------------------------------------------------
 	env.render(renderer, mu);
 	env.renderTranslucent(renderer, mu);
 
 	// --------------------------------------------------------
+	// Repor o estado anterior
 	mu.popMatrix(gmu::VIEW);
 	mu.popMatrix(gmu::PROJECTION);
 
@@ -1701,10 +1693,10 @@ void renderSim(void)
 		// Camera tracking the car
 		setCameraBehind();
 	}
-	else if (orthoProj || fixedCamera)
+	else if (fixedCamera)
 	{
-		// Top camera.
-		mu.lookAt(camX, camY, camZ, 0, 0, 0, 0, 0, -1);
+		// Top camera. 
+		mu.lookAt(camX, camY, camZ, 0, 0, 0, 0, 0, -1); // (0,0,-1)->up 
 	}
 	else
 	{
