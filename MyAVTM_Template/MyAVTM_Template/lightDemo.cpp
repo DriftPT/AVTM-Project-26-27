@@ -161,22 +161,151 @@ bool objVisible = false;
 
 
 // ------------------------------------------------------------
-// Aux function to render a mesh using the current MODEL matrix.
+// Mesh IDs inside renderer.myMeshes
+#define MESH_CUBE 0
+#define MESH_PAWN 1
+#define MESH_SPHERE 2
+#define MESH_CYLINDER 3
+#define MESH_CONE 4
+#define MESH_TORUS 5
 
-void drawMesh(int meshID, int texMode = 0)
+// ------------------------------------------------------------
+// Gameplay HUD
+
+const int MAX_LIVES = 5;
+int lives = MAX_LIVES;
+bool gameOver = false;
+bool paused = false;
+bool gameStarted = false;
+
+// Pontos
+const int POINTS_CHEERIO_HIT = -10;
+const int POINTS_BUTTER_HIT = -15;
+const int POINTS_LIFE_LOST = -100;
+const int POINTS_ORB_COLLECTED = +100;
+int points = 0;
+int lastScoreChange = 0;
+float scoreChangeTimer = 0.0f;
+const float SCORE_CHANGE_DISPLAY_TIME = 1.5f;
+
+// Evita descontar pontos em todos os frames enquanto o carro está encostado ao obstáculo
+bool wasHittingCheerio = false;
+bool wasHittingButter = false;
+
+// ------------------------------------------------------------
+// Reflections
+const float ROAD_REFLECTION_ALPHA = 0.85f; // menor = reflexo mais forte
+const float TABLE_REFLECTION_ALPHA = 0.7f;
+
+// ------------------------------------------------------------
+// Car keyboard state
+
+bool keyW = false;
+bool keyS = false;
+bool keyA = false;
+bool keyD = false;
+
+// ------------------------------------------------------------
+// Car movement
+
+float carVelocity = 0.0f;
+float carAcceleration = 0.0f;
+
+// Direction of the car.
+// For now the car points towards +Z.
+float carDirection[3] = { 0.0f, 0.0f, 1.0f };
+
+// Movement values
+const float ACCELERATION = 6.0f;
+const float DECELERATION = 4.0f;
+
+const float TURN_SPEED = 75.0f; // degrees per second
+
+const float MAX_SPEED = 25.0f;
+
+// Used to calculate the time between frames
+int lastUpdateTime = 0;
+
+// ------------------------------------------------------------
+// COLISIONS
+// ------------------------------------------------------------
+// Axis-Aligned Bounding Box structure
+
+Environment::AABB carAABB;
+
+bool showCarAABB = false;
+void toggleCarAABB() { showCarAABB = !showCarAABB; }
+
+// Car bounding box dimensions
+float CAR_MIN_X = -1.815f * CAR_SCALE;
+float CAR_MAX_X = 1.815f * CAR_SCALE;
+
+float CAR_MIN_Y = 0.0f;
+float CAR_MAX_Y = 1.85f * CAR_SCALE;
+
+float CAR_MIN_Z = -3.15f * CAR_SCALE;
+float CAR_MAX_Z = 2.85f * CAR_SCALE;
+
+// ------------------------------------------------------------
+// MATERIALS
+
+struct CarMaterial
 {
-	dataMesh data;
+	float ambient[4];
+	float diffuse[4];
+	float specular[4];
+	float shininess;
+};
 
-	mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-	mu.computeNormalMatrix3x3();
+// Car body - blue
+CarMaterial bodyMaterial = {
+	{ 0.02f, 0.05f, 0.15f, 1.0f },
+	{ 0.02f, 0.30f, 0.80f, 1.0f },
+	{ 0.60f, 0.70f, 0.90f, 1.0f },
+	70.0f
+};
 
-	data.meshID = meshID;
-	data.texMode = texMode;
-	data.vm = mu.get(gmu::VIEW_MODEL);
-	data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-	data.normal = mu.getNormalMatrix();
-	renderer.renderMesh(data);
-}
+// Headlights - blueish white
+CarMaterial headlightMaterial = {
+	{0.12f, 0.14f, 0.18f, 1.0f},
+	{0.75f, 0.85f, 1.00f, 1.0f},
+	{1.00f, 1.00f, 1.00f, 1.0f},
+	100.0f };
+
+// RearLights - red
+CarMaterial rearLightMaterial = {
+	{ 0.20f, 0.00f, 0.00f, 1.0f },
+	{ 0.90f, 0.05f, 0.05f, 1.0f },
+	{ 0.80f, 0.30f, 0.30f, 1.0f },
+	50.0f
+};
+
+// Dark color
+CarMaterial darkMaterial = {
+	{ 0.03f, 0.03f, 0.03f, 1.0f },
+	{ 0.12f, 0.12f, 0.12f, 1.0f },
+	{ 0.20f, 0.20f, 0.20f, 1.0f },
+	20.0f
+};
+
+
+// Windshield and windows - light blue transparent glass
+CarMaterial glassMaterial = {
+	{ 0.05f, 0.10f, 0.15f, 1.0f },
+	{ 0.15f, 0.35f, 0.45f, 0.7f },
+	{ 0.90f, 0.95f, 1.00f, 1.0f },
+	90.0f
+};
+
+// Bounding box debug material - red
+CarMaterial boundingBoxMaterial = {
+	{ 0.3f, 0.0f, 0.0f, 1.0f },
+	{ 1.0f, 0.0f, 0.0f, 1.0f },
+	{ 1.0f, 0.0f, 0.0f, 1.0f },
+	10.0f
+};
+
+
 
 /// ::::::::::::::::::::::::::::::::::::::::::::::::CALLBACK FUNCIONS:::::::::::::::::::::::::::::::::::::::::::::::::://///
 
@@ -288,150 +417,24 @@ void static setCameraBehind()
 	mu.lookAt(camX, camY, camZ, carX, carBaseY, carZ, 0, 1, 0); // the sum of the car postion makes the camera follow it
 }
 
-// ------------------------------------------------------------
-// Mesh IDs inside renderer.myMeshes
-#define MESH_CUBE 0
-#define MESH_PAWN 1
-#define MESH_SPHERE 2
-#define MESH_CYLINDER 3
-#define MESH_CONE 4
-#define MESH_TORUS 5
 
 // ------------------------------------------------------------
-// Gameplay HUD
+// Aux function to render a mesh using the current MODEL matrix.
 
-const int MAX_LIVES = 5;
-int lives = MAX_LIVES;
-bool gameOver = false;
-bool paused = false;
-bool gameStarted = false;
-
-// Pontos
-const int POINTS_CHEERIO_HIT = -10;
-const int POINTS_BUTTER_HIT  = -15;
-const int POINTS_LIFE_LOST   = -100;
-const int POINTS_ORB_COLLECTED   = +100;
-int points = 0;
-int lastScoreChange = 0;
-float scoreChangeTimer = 0.0f;
-const float SCORE_CHANGE_DISPLAY_TIME = 1.5f;
-
-// Evita descontar pontos em todos os frames enquanto o carro está encostado ao obstáculo
-bool wasHittingCheerio = false;
-bool wasHittingButter  = false;
-
-// ------------------------------------------------------------
-// Reflections
-const float ROAD_REFLECTION_ALPHA = 0.85f; // menor = reflexo mais forte
-const float TABLE_REFLECTION_ALPHA = 0.7f;
-
-// ------------------------------------------------------------
-// Car keyboard state
-
-bool keyW = false;
-bool keyS = false;
-bool keyA = false;
-bool keyD = false;
-
-// ------------------------------------------------------------
-// Car movement
-
-float carVelocity = 0.0f;
-float carAcceleration = 0.0f;
-
-// Direction of the car.
-// For now the car points towards +Z.
-float carDirection[3] = {0.0f, 0.0f, 1.0f};
-
-// Movement values
-const float ACCELERATION = 6.0f;
-const float DECELERATION = 4.0f;
-
-const float TURN_SPEED = 75.0f; // degrees per second
-
-const float MAX_SPEED = 25.0f;
-
-// Used to calculate the time between frames
-int lastUpdateTime = 0;
-
-// ------------------------------------------------------------
-// COLISIONS
-// ------------------------------------------------------------
-// Axis-Aligned Bounding Box structure
-
-Environment::AABB carAABB;
-
-bool showCarAABB = false;
-void toggleCarAABB() { showCarAABB = !showCarAABB; }
-
-// Car bounding box dimensions
-float CAR_MIN_X = -1.815f * CAR_SCALE;
-float CAR_MAX_X = 1.815f * CAR_SCALE;
-
-float CAR_MIN_Y = 0.0f;
-float CAR_MAX_Y = 1.85f * CAR_SCALE;
-
-float CAR_MIN_Z = -3.15f * CAR_SCALE;
-float CAR_MAX_Z = 2.85f * CAR_SCALE;
-
-// ------------------------------------------------------------
-// MATERIALS
-
-struct CarMaterial
+void drawMesh(int meshID, int texMode = 0)
 {
-	float ambient[4];
-	float diffuse[4];
-	float specular[4];
-	float shininess;
-};
+	dataMesh data;
 
-// Car body - blue
-CarMaterial bodyMaterial = {
-	{ 0.02f, 0.05f, 0.15f, 1.0f },
-	{ 0.02f, 0.30f, 0.80f, 1.0f },
-	{ 0.60f, 0.70f, 0.90f, 1.0f },
-	70.0f
-};
+	mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+	mu.computeNormalMatrix3x3();
 
-// Headlights - blueish white
-CarMaterial headlightMaterial = {
-	{0.12f, 0.14f, 0.18f, 1.0f},
-	{0.75f, 0.85f, 1.00f, 1.0f},
-	{1.00f, 1.00f, 1.00f, 1.0f},
-	100.0f};
-
-// RearLights - red
-CarMaterial rearLightMaterial = {
-	{ 0.20f, 0.00f, 0.00f, 1.0f },
-	{ 0.90f, 0.05f, 0.05f, 1.0f },
-	{ 0.80f, 0.30f, 0.30f, 1.0f },
-	50.0f
-};
-
-// Dark color
-CarMaterial darkMaterial = {
-	{ 0.03f, 0.03f, 0.03f, 1.0f },
-	{ 0.12f, 0.12f, 0.12f, 1.0f },
-	{ 0.20f, 0.20f, 0.20f, 1.0f },
-	20.0f
-};
-
-
-// Windshield and windows - light blue transparent glass
-CarMaterial glassMaterial = {
-	{ 0.05f, 0.10f, 0.15f, 1.0f },
-	{ 0.15f, 0.35f, 0.45f, 0.7f },
-	{ 0.90f, 0.95f, 1.00f, 1.0f },
-	90.0f
-};
-
-// Bounding box debug material - red
-CarMaterial boundingBoxMaterial = {
-	{ 0.3f, 0.0f, 0.0f, 1.0f },
-	{ 1.0f, 0.0f, 0.0f, 1.0f },
-	{ 1.0f, 0.0f, 0.0f, 1.0f },
-	10.0f
-};
+	data.meshID = meshID;
+	data.texMode = texMode;
+	data.vm = mu.get(gmu::VIEW_MODEL);
+	data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+	data.normal = mu.getNormalMatrix();
+	renderer.renderMesh(data);
+}
 
 void setMeshMaterial(int meshID, const CarMaterial &material)
 {
