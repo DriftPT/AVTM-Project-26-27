@@ -3,7 +3,7 @@
 uniform mat4 m_pvm;
 uniform mat4 m_viewModel;
 uniform mat3 m_normal;
-uniform mat4 m_model; //por causa do cubo para a skybox
+
 
 uniform vec4 l_pos;
 
@@ -17,7 +17,6 @@ out Data {
 	vec3 lightDir;
 	vec2 tex_coord;
 	vec3 fragPos;
-	vec3 skyboxTexCoord; //coordenadas do skyblock para o .frag
 } DataOut;
 
 void main () {
@@ -29,8 +28,6 @@ void main () {
 	DataOut.lightDir = vec3(l_pos - pos);
 	DataOut.eye = vec3(-pos);
 	DataOut.tex_coord = texCoord.st;
-	DataOut.skyboxTexCoord = vec3(m_model * position);	//Transformação de modelação do cubo unitário 
-	DataOut.skyboxTexCoord.x = - DataOut.skyboxTexCoord.x; //Texturas mapeadas no interior logo negar a coordenada x
 
 	gl_Position = m_pvm * position;	
 }
