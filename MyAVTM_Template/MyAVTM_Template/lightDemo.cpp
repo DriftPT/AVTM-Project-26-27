@@ -67,7 +67,7 @@ float camX, camY, camZ;
 
 // Camera Spherical Coordinates
 float alpha = 57.0f, _beta = 18.0f;
-float r = 45.0f;
+float r = 25.0f;
 
 // Projections Variables
 bool orthoProj = false;
@@ -101,7 +101,7 @@ const float CAR_SCALE = 0.8f;
 
 // Auxiliary variables
 bool fixedCamera = false;
-bool trackingCamera = false;
+bool trackingCamera = true;
 float cameraOrientation = 0.0f;
 bool globalIllumination = true;
 bool candlesIllumination = false;
@@ -281,7 +281,6 @@ void static setCameraBehind()
 {
 	alpha = 180.0f + carAngle + cameraOrientation;
 	_beta = 20.0f; // Behind Camera Spherical Coordinates - alpha horizontal rotation - beta vertical rotation
-	r = FOLLOW_CAMERA_DISTANCE;
 	camX = carX + r * sin(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
 	camZ = carZ + r * cos(alpha * 3.14f / 180.0f) * cos(_beta * 3.14f / 180.0f);
 	camY = carBaseY + r * sin(_beta * 3.14f / 180.0f);
@@ -1883,6 +1882,7 @@ void processKeys(unsigned char key, int xx, int yy)
 		trackingCamera = true;
 		cameraOrientation = 0.0f;
 		fixedCamera = false;
+		r = FOLLOW_CAMERA_DISTANCE;
 		setCameraBehind();
 		updateProjection();
 		printf("Movable Camera - Perspective projection [%d]\n", perspProj);
