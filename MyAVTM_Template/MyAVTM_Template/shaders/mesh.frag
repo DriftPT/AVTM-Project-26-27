@@ -14,7 +14,8 @@ in Data {
 	vec3 eye;
 	vec3 lightDir;
 	vec2 tex_coord;
-	vec3 fragPos;
+	vec3 fragPos; // For lighting
+	vec3 skyboxTexCoord; // For Sky Block
 } DataIn;
 
 uniform Materials mat;
@@ -40,9 +41,17 @@ uniform float spotCosCutOff;
 uniform bool candlesLightOn;
 uniform vec4 candlesLightPos0, candlesLightPos1, candlesLightPos2, candlesLightPos3, candlesLightPos4, candlesLightPos5;
 
+// Fog
 uniform bool fogEnabled;
 uniform vec3 fogColor;
 uniform int depthFog;
+
+// For Bump mapping
+uniform sampler2D normalMap;
+
+// For SkyBlock
+uniform samplerCube cubeMap;
+uniform sampler2D sphereMap;
 
 out vec4 colorOut;
 
@@ -124,6 +133,13 @@ vec3 calculateCandleLight(vec4 lightPos, vec3 n, vec3 e, out vec3 specular)
 }
 
 void main() {
+
+	//SkyBlock, texMode = 9
+	if (texMode == 9) {
+		colorOut = texture(cubeMap, DataIn.skyboxTexCoord);
+		return;
+	}
+
 	vec4 texel, texel1;
 
 	vec3 n = normalize(DataIn.normal);

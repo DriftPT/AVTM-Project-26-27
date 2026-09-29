@@ -136,7 +136,7 @@ bool Renderer::setRenderMeshesShaderProg(const std::string& vertShaderPath, cons
     glBindFragDataLocation(program, 0, "colorOut");
     glBindAttribLocation(program, Shader::VERTEX_COORD_ATTRIB, "position");
     glBindAttribLocation(program, Shader::NORMAL_ATTRIB, "normal");
-	glBindAttribLocation(program, Shader::TANGENT_ATTRIB, "tangent");  // for normal mapping 
+    glBindAttribLocation(program, Shader::TANGENT_ATTRIB, "tangent");  // for normal mapping 
     glBindAttribLocation(program, Shader::TEXTURE_COORD_ATTRIB, "texCoord");
 
 
@@ -146,14 +146,31 @@ bool Renderer::setRenderMeshesShaderProg(const std::string& vertShaderPath, cons
     if (!shader.isProgramValid())
         printf("GLSL Model Program Not Valid!\n");
 
+    glUseProgram(program);
+
+    model_loc = glGetUniformLocation(program, "m_model");
+    view_loc = glGetUniformLocation(program, "m_view");
     pvm_loc = glGetUniformLocation(program, "m_pvm");
     vm_loc = glGetUniformLocation(program, "m_viewModel");
     normal_loc = glGetUniformLocation(program, "m_normal");
-    texMode_loc = glGetUniformLocation(program, "texMode"); // different modes of texturing
+    texMode_loc = glGetUniformLocation(program, "texMode");
     lpos_loc = glGetUniformLocation(program, "l_pos");
+
     tex_loc[0] = glGetUniformLocation(program, "texmap");
     tex_loc[1] = glGetUniformLocation(program, "texmap1");
     tex_loc[2] = glGetUniformLocation(program, "texmap2");
+    tex_loc[3] = glGetUniformLocation(program, "cubeMap");
+    tex_loc[4] = glGetUniformLocation(program, "sphereMap");
+    tex_loc[5] = glGetUniformLocation(program, "normalMap");
+
+    glUniform1i(tex_loc[0], 0);
+    glUniform1i(tex_loc[1], 1);
+    glUniform1i(tex_loc[2], 2);
+    glUniform1i(tex_loc[3], 3);
+    glUniform1i(tex_loc[4], 4);
+    glUniform1i(tex_loc[5], 5);
+
+    glUseProgram(0);
 
     return(shader.isProgramLinked() && shader.isProgramValid());
 }

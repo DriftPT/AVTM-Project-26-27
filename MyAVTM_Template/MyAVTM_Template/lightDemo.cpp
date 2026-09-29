@@ -105,6 +105,9 @@ bool trackingCamera = true;
 float cameraOrientation = 0.0f;
 bool globalIllumination = true;
 bool candlesIllumination = false;
+bool bumpMappingMode = false;
+bool skyBoxVisible = false;
+int skyBoxTextureID = -1;
 
 // Mouse Tracking Variables
 int startX, startY, tracking = 0;
@@ -1336,6 +1339,67 @@ void drawCandles() {
 		}
 	}
 
+void drawSkyBox() {
+	if (!skyBoxVisible || skyBoxTextureID < 0)
+		return;
+
+	dataMesh data;
+
+	// Guardar estado atual
+	GLboolean depthMask;
+	GLint cullFaceMode;
+	GLint frontFaceMode;
+	GLint depthFunc;
+
+	glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMask);
+	glGetIntegerv(GL_CULL_FACE_MODE, &cullFaceMode);
+	glGetIntegerv(GL_FRONT_FACE, &frontFaceMode);
+	glGetIntegerv(GL_DEPTH_FUNC, &depthFunc);
+
+	renderer.setFog(false, fogColor); // O skybox não deve ser afetado pelo fog.
+	
+	renderer.setTexUnit(0, skyBoxTextureID); // Garantir que a textura correta está ativa.
+
+	glDepthMask(GL_FALSE); //podia fazer o disable do depth teste
+	glFrontFace(GL_CW); // set clockwise vertex order to mean the front => o mesmo que fazer glCullFace(GL_FRONT);
+
+	mu.pushMatrix(gmu::MODEL);
+	mu.scale(gmu::MODEL, 1000.0f, 1000.0f, 1000.0f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f); //centrar o cubo na origem
+
+	mu.pushMatrix(gmu::VIEW);
+	float* viewMatrix = mu.get(gmu::VIEW);
+	viewMatrix[12] = 0.0f; //cancel the translation of the camera, so the sky box is always centered at the camera position
+	viewMatrix[13] = 0.0f;
+	viewMatrix[14] = 0.0f;
+
+	mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+	mu.computeNormalMatrix3x3();
+
+	data.meshID = 0; //cube mesh
+	data.texMode = 3; //skyBox texture mapping
+
+	data.model = mu.get(gmu::MODEL);
+	data.view = mu.get(gmu::VIEW);
+	data.vm = mu.get(gmu::VIEW_MODEL);
+	data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+	data.normal = mu.getNormalMatrix();
+	renderer.renderMesh(data);
+	mu.popMatrix(gmu::MODEL);
+	mu.popMatrix(gmu::VIEW);
+
+	renderer.setFog(fogEnabled, fogColor); // Restaurar fog normal para a cena.
+
+	// Restaurar estado do GLSL.
+	glDepthMask(depthMask);
+	glDepthFunc(depthFunc);
+	glCullFace(cullFaceMode);
+	glFrontFace(frontFaceMode);
+
+	glFrontFace(GL_CCW); // restore counter clockwise vertex order to mean the front => o mesmo que fazer glCullFace(GL_BACK);
+	glDepthMask(GL_TRUE);
+}
+
 void updateCarHeadlights(float headlightsWorld[2][4], float coneDirWorld[4])
 {
 	float angleRad = carAngle * 3.14159265f / 180.0f;
@@ -1723,7 +1787,30 @@ void renderSim(void)
 	setSceneLights(false);
 	renderer.setFog(fogEnabled, fogColor);
 
+<<<<<<< Updated upstream
 	if (camY > env.getRoadSurfaceY())
+=======
+	// Desenha mesa / estrada / linha de meta / cheerios / manteigas / laranjas
+	env.render(renderer, mu);
+	// Draw the car
+	if (!objVisible) {
+		drawCar();
+	}
+	drawCarAABB();
+	
+
+	// Render text (bitmap fonts) in screen coordinates. So use ortoghonal projection with viewport coordinates.
+	// Each glyph quad texture needs just one byte color channel: 0 in background and 1 for the actual character pixels. Use it for alpha blending
+	// text to be rendered in last place to be in front of everything
+
+	dataMesh data;
+
+	//Draw SkyBlock
+	// Render Sky Box - myMeshes[0] contains the cube object
+	drawSkyBox();
+
+	if (objVisible)
+>>>>>>> Stashed changes
 	{
 		renderSceneWithReflections();
 	} 
@@ -1855,7 +1942,7 @@ void processKeys(unsigned char key, int xx, int yy)
 			lives = MAX_LIVES;
 			points = 0;
 			lastScoreChange = 0;
-        	scoreChangeTimer = 0.0f;
+			scoreChangeTimer = 0.0f;
 			gameOver = false;
 			resetCarToStart();
 			env.resetPointOrbs();
@@ -1921,10 +2008,20 @@ void processKeys(unsigned char key, int xx, int yy)
 	case 'O':
 	case 'o':
 		objVisible = !objVisible;
-		updateCarBounds();         
+		updateCarBounds();
 		updateCarAABB();
 
 		printf("OBJ Visibility [%d]\n", objVisible);
+		break;
+	case 'V':
+	case 'v':
+		bumpMappingMode = !bumpMappingMode;
+		printf("Bump Mapping Mode [%d]\n", bumpMappingMode);
+		break;
+	case 'Z':
+	case 'z':
+		skyBoxVisible = !skyBoxVisible;
+		printf("Sky Box Visibility [%d]\n", skyBoxVisible);
 		break;
 	}
 }
@@ -2091,6 +2188,13 @@ void buildScene()
 	renderer.TexObjArray.texture2D_Loader("assets/orange.jpg");      // 6
 	renderer.TexObjArray.texture2D_Loader("assets/tire.png");        // 7
 	renderer.TexObjArray.texture2D_Loader("assets/license.png");     // 8
+	renderer.TexObjArray.texture2D_Loader("assets/normalMap.tga");   // 9
+	renderer.TexObjArray.texture2D_Loader("assets/sphereMap.jpg");	 // 10
+
+	//Sky Box Texture Object
+	const char* filenames[] = { "assets/posx.jpg", "assets/negx.jpg", "assets/posy.jpg", "assets/negy.jpg", "assets/posz.jpg", "assets/negz.jpg" };
+	renderer.TexObjArray.textureCubeMap_Loader(filenames);
+	skyBoxTextureID = renderer.TexObjArray.getNumTextureObjects() - 1;
 
 	// Scene geometry with triangle meshes
 
