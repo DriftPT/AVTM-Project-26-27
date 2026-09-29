@@ -27,7 +27,7 @@
 #include <IL/il.h>
 
 // assimp include files. These three are usually needed.
-#include <assimp/Importer.hpp>	//OO version Header!
+#include <assimp/Importer.hpp> //OO version Header!
 #include <assimp/scene.h>
 
 #include "renderer.h"
@@ -73,15 +73,15 @@ float r = 25.0f;
 bool orthoProj = false;
 bool perspProj = true;
 const float PERSPECTIVE_FOV = 53.13f;
-const float ORTHO_SIZE = 100.0f;           
-const float TOP_CAMERA_HEIGHT = 200.0f;     
+const float ORTHO_SIZE = 100.0f;
+const float TOP_CAMERA_HEIGHT = 200.0f;
 const float FOLLOW_CAMERA_DISTANCE = 25.0f;
 
 // Rear-view mirror (top-right corner)
 bool showRearMirror = true;
 const float MIRROR_WIDTH_RATIO = 0.28f;
 const float MIRROR_HEIGHT_RATIO = 0.28f;
-const int   MIRROR_MARGIN = 10;
+const int MIRROR_MARGIN = 10;
 const float MIRROR_FOV = PERSPECTIVE_FOV;
 
 // Car starting position (start line)
@@ -115,31 +115,29 @@ long myTime, timebase = 0, frame = 0;
 char s[32];
 
 // Global Illumination - Directional
-float globalLightPos[4] = { 0.2f, 1.0f, 0.3f, 0.0f };
+float globalLightPos[4] = {0.2f, 1.0f, 0.3f, 0.0f};
 
-// 6 Candles Lights Positions - Pontual 
+// 6 Candles Lights Positions - Pontual
 float candles[6][4] = {
-	{ -54.5f, env.getRoadSurfaceY() + 1.6f,  20.5f, 1.0f },
-	{ -47.7f, env.getRoadSurfaceY() + 1.6f, -40.9f, 1.0f },
-	{   0.0f, env.getRoadSurfaceY() + 1.6f, -40.9f, 1.0f },
-	{  54.5f, env.getRoadSurfaceY() + 1.6f, -13.6f, 1.0f },
-	{  54.5f, env.getRoadSurfaceY() + 1.6f,  38.2f, 1.0f },
-	{   0.0f, env.getRoadSurfaceY() + 1.6f,  38.2f, 1.0f }
-};
+	{-54.5f, env.getRoadSurfaceY() + 1.6f, 20.5f, 1.0f},
+	{-47.7f, env.getRoadSurfaceY() + 1.6f, -40.9f, 1.0f},
+	{0.0f, env.getRoadSurfaceY() + 1.6f, -40.9f, 1.0f},
+	{54.5f, env.getRoadSurfaceY() + 1.6f, -13.6f, 1.0f},
+	{54.5f, env.getRoadSurfaceY() + 1.6f, 38.2f, 1.0f},
+	{0.0f, env.getRoadSurfaceY() + 1.6f, 38.2f, 1.0f}};
 
 // Spotlight
 bool carHeadlights = false;
 float localHeadlights[2][4] = {
-		{ -1.0f, 1.0f, 2.71f, 1.0f },
-		{  1.0f, 1.0f, 2.71f, 1.0f }
-};
-float coneDir[4] = { 0.0f, -0.0f, -1.0f, 0.0f };
+	{-1.0f, 1.0f, 2.71f, 1.0f},
+	{1.0f, 1.0f, 2.71f, 1.0f}};
+float coneDir[4] = {0.0f, -0.0f, -1.0f, 0.0f};
 float spotCosCutOff = 0.93;
 
 // Fog
 bool fogEnabled = true;
 void togglefog() { fogEnabled = !fogEnabled; }
-float fogColor[3] = { 0.5f, 0.6f, 0.7f };
+float fogColor[3] = {0.5f, 0.6f, 0.7f};
 
 bool fontLoaded = false;
 
@@ -148,17 +146,16 @@ bool fontLoaded = false;
 Assimp::Importer importer;
 
 // the global Assimp scene object
-const aiScene* scene;
+const aiScene *scene;
 
 // scale factor for the Assimp model to fit in the window
 float scaleFactor = 1.0;
 
-// by default if there is a normal map then bump effect is implemented. press key "b" to enable/disable normal mapping 
+// by default if there is a normal map then bump effect is implemented. press key "b" to enable/disable normal mapping
 bool normalMapKey = TRUE;
 
 // .obj Visability
 bool objVisible = false;
-
 
 // ------------------------------------------------------------
 // Mesh IDs inside renderer.myMeshes
@@ -213,7 +210,7 @@ float carAcceleration = 0.0f;
 
 // Direction of the car.
 // For now the car points towards +Z.
-float carDirection[3] = { 0.0f, 0.0f, 1.0f };
+float carDirection[3] = {0.0f, 0.0f, 1.0f};
 
 // Movement values
 const float ACCELERATION = 6.0f;
@@ -259,53 +256,45 @@ struct CarMaterial
 
 // Car body - blue
 CarMaterial bodyMaterial = {
-	{ 0.02f, 0.05f, 0.15f, 1.0f },
-	{ 0.02f, 0.30f, 0.80f, 1.0f },
-	{ 0.60f, 0.70f, 0.90f, 1.0f },
-	70.0f
-};
+	{0.02f, 0.05f, 0.15f, 1.0f},
+	{0.02f, 0.30f, 0.80f, 1.0f},
+	{0.60f, 0.70f, 0.90f, 1.0f},
+	70.0f};
 
 // Headlights - blueish white
 CarMaterial headlightMaterial = {
 	{0.12f, 0.14f, 0.18f, 1.0f},
 	{0.75f, 0.85f, 1.00f, 1.0f},
 	{1.00f, 1.00f, 1.00f, 1.0f},
-	100.0f };
+	100.0f};
 
 // RearLights - red
 CarMaterial rearLightMaterial = {
-	{ 0.20f, 0.00f, 0.00f, 1.0f },
-	{ 0.90f, 0.05f, 0.05f, 1.0f },
-	{ 0.80f, 0.30f, 0.30f, 1.0f },
-	50.0f
-};
+	{0.20f, 0.00f, 0.00f, 1.0f},
+	{0.90f, 0.05f, 0.05f, 1.0f},
+	{0.80f, 0.30f, 0.30f, 1.0f},
+	50.0f};
 
 // Dark color
 CarMaterial darkMaterial = {
-	{ 0.03f, 0.03f, 0.03f, 1.0f },
-	{ 0.12f, 0.12f, 0.12f, 1.0f },
-	{ 0.20f, 0.20f, 0.20f, 1.0f },
-	20.0f
-};
-
+	{0.03f, 0.03f, 0.03f, 1.0f},
+	{0.12f, 0.12f, 0.12f, 1.0f},
+	{0.20f, 0.20f, 0.20f, 1.0f},
+	20.0f};
 
 // Windshield and windows - light blue transparent glass
 CarMaterial glassMaterial = {
-	{ 0.05f, 0.10f, 0.15f, 1.0f },
-	{ 0.15f, 0.35f, 0.45f, 0.7f },
-	{ 0.90f, 0.95f, 1.00f, 1.0f },
-	90.0f
-};
+	{0.05f, 0.10f, 0.15f, 1.0f},
+	{0.15f, 0.35f, 0.45f, 0.7f},
+	{0.90f, 0.95f, 1.00f, 1.0f},
+	90.0f};
 
 // Bounding box debug material - red
 CarMaterial boundingBoxMaterial = {
-	{ 0.3f, 0.0f, 0.0f, 1.0f },
-	{ 1.0f, 0.0f, 0.0f, 1.0f },
-	{ 1.0f, 0.0f, 0.0f, 1.0f },
-	10.0f
-};
-
-
+	{0.3f, 0.0f, 0.0f, 1.0f},
+	{1.0f, 0.0f, 0.0f, 1.0f},
+	{1.0f, 0.0f, 0.0f, 1.0f},
+	10.0f};
 
 /// ::::::::::::::::::::::::::::::::::::::::::::::::CALLBACK FUNCIONS:::::::::::::::::::::::::::::::::::::::::::::::::://///
 
@@ -360,7 +349,6 @@ void changeSize(int w, int h)
 // ------------------------------------------------------------
 //
 // Update Projection Function
-// made by Gonçalo
 //
 
 void updateProjection()
@@ -387,7 +375,6 @@ void updateProjection()
 // ------------------------------------------------------------
 //
 // Set Camera Over Function
-// made by Gonçalo
 //
 
 void static setCameraOver()
@@ -403,7 +390,6 @@ void static setCameraOver()
 // ------------------------------------------------------------
 //
 // Set Camera Behind the car Function
-// made by Gonçalo
 //
 
 void static setCameraBehind()
@@ -416,7 +402,6 @@ void static setCameraBehind()
 
 	mu.lookAt(camX, camY, camZ, carX, carBaseY, carZ, 0, 1, 0); // the sum of the car postion makes the camera follow it
 }
-
 
 // ------------------------------------------------------------
 // Aux function to render a mesh using the current MODEL matrix.
@@ -457,7 +442,6 @@ void setMeshMaterial(int meshID, const CarMaterial &material)
 		material.shininess;
 }
 
-
 // Function to update the car's bounding box based on the Assimp model's bounding box
 void updateCarBounds()
 {
@@ -489,7 +473,6 @@ void updateCarBounds()
 		CAR_MAX_Z = 2.85f * CAR_SCALE;
 	}
 }
-
 
 // Function to update the car's Axis-Aligned Bounding Box (AABB) based on its position and orientation
 void updateCarAABB()
@@ -539,59 +522,67 @@ void updateCarAABB()
 
 void resetCarToStart()
 {
-    carX = CAR_START_X;
-    carZ = CAR_START_Z;
-    carAngle = CAR_START_ANGLE;
-    carVelocity = 0.0f;
-    carAcceleration = 0.0f;
-    updateCarAABB();
+	carX = CAR_START_X;
+	carZ = CAR_START_Z;
+	carAngle = CAR_START_ANGLE;
+	carVelocity = 0.0f;
+	carAcceleration = 0.0f;
+	updateCarAABB();
 }
 
 void addPoints(int delta)
 {
-    points += delta;
-    lastScoreChange = delta;
-    scoreChangeTimer = SCORE_CHANGE_DISPLAY_TIME;
+	points += delta;
+	lastScoreChange = delta;
+	scoreChangeTimer = SCORE_CHANGE_DISPLAY_TIME;
 }
 
 void loseLife()
 {
 	addPoints(POINTS_LIFE_LOST);
-    lives--;
-    if (lives <= 0){
-        lives = 0;
-        gameOver = true;
-    } else{
-        resetCarToStart();
-    }
+	lives--;
+	if (lives <= 0)
+	{
+		lives = 0;
+		gameOver = true;
+	}
+	else
+	{
+		resetCarToStart();
+	}
 }
 
 void handleCollisions(float oldX, float oldZ)
 {
-	const auto& cheerios = env.getCheerios();
-	const auto& butters  = env.getButters();
-	const auto& oranges  = env.getOranges();
-	const auto& orbs     = env.getPointOrbs();
+	const auto &cheerios = env.getCheerios();
+	const auto &butters = env.getButters();
+	const auto &oranges = env.getOranges();
+	const auto &orbs = env.getPointOrbs();
 	const float CHEERIO_PUSH = 0.8f; // o quanto o cheerio se move quando é atingido
 
-	// CHEERIOS 
+	// CHEERIOS
 	bool cheerioHit = false;
-	for (const auto& c : cheerios)
+	for (const auto &c : cheerios)
 	{
 		if (env.checkOverlap(carAABB, c.box))
-		{	
+		{
 			cheerioHit = true;
 
 			// Empurra ligeiramente o cheerio para longe do carro
 			float dx = c.x - carX;
 			float dz = c.z - carZ;
 			float len = sqrtf(dx * dx + dz * dz);
-			if (len > 0.0001f) { dx /= len; dz /= len; } // normalização do vetor de deslocamento
+			if (len > 0.0001f)
+			{
+				dx /= len;
+				dz /= len;
+			} // normalização do vetor de deslocamento
 			env.nudgeCheerio(c.id, dx * CHEERIO_PUSH, dz * CHEERIO_PUSH);
 		}
 	}
 	// Se o carro colidiu com um cheerio, repõe a posição anterior e para
-	if (cheerioHit){
+	if (cheerioHit)
+	{
 		if (!wasHittingCheerio)
 			addPoints(POINTS_CHEERIO_HIT);
 
@@ -604,9 +595,9 @@ void handleCollisions(float oldX, float oldZ)
 	}
 	wasHittingCheerio = cheerioHit;
 
-	// BUTTERS 
+	// BUTTERS
 	bool butterHit = false;
-	for (const auto& b : butters)
+	for (const auto &b : butters)
 	{
 		if (env.checkOverlap(carAABB, b.box))
 		{
@@ -614,7 +605,8 @@ void handleCollisions(float oldX, float oldZ)
 			env.hitButter(b.id);
 		}
 	}
-	if (butterHit){
+	if (butterHit)
+	{
 		if (!wasHittingButter)
 			addPoints(POINTS_BUTTER_HIT);
 
@@ -627,18 +619,18 @@ void handleCollisions(float oldX, float oldZ)
 	wasHittingButter = butterHit;
 
 	// ORANGES
-	for (const auto& o : oranges)
+	for (const auto &o : oranges)
 	{
 		if (o.active && env.checkOverlap(carAABB, o.box))
 		{
-        	env.hitOrange(o.id);
+			env.hitOrange(o.id);
 			loseLife();
 			break;
 		}
 	}
 
 	// POINT ORBS
-	for (const auto& orb : orbs)
+	for (const auto &orb : orbs)
 	{
 		if (orb.active && env.checkOverlap(carAABB, orb.box))
 		{
@@ -647,12 +639,13 @@ void handleCollisions(float oldX, float oldZ)
 			break;
 		}
 	}
-	
+
 	// Verificar se caiu da mesa
-	float halfTableX = env.getTableWidth() * 0.5f; 
-    float halfTableZ = env.getTableDepth() * 0.5f; 
-    if (fabs(carX) > halfTableX || fabs(carZ) > halfTableZ){  
-		loseLife(); 
+	float halfTableX = env.getTableWidth() * 0.5f;
+	float halfTableZ = env.getTableDepth() * 0.5f;
+	if (fabs(carX) > halfTableX || fabs(carZ) > halfTableZ)
+	{
+		loseLife();
 	}
 }
 
@@ -756,7 +749,6 @@ void updateCar(float dt)
 	handleCollisions(oldX, oldZ);
 }
 
-
 void drawCabin()
 {
 	// ROOF
@@ -822,8 +814,6 @@ void drawCabin()
 	drawMesh(MESH_CUBE);
 	mu.popMatrix(gmu::MODEL);
 }
-
-
 
 void drawWheel(float x, float y, float z)
 {
@@ -978,7 +968,7 @@ void drawCar()
 
 	// ------------------------------------------------------------
 	// SEATS and STEERING WHEEL
-	
+
 	// Front seats
 	drawSeat(-0.55f, -0.2f);
 	drawSeat(0.55f, -0.2f);
@@ -1074,7 +1064,7 @@ void drawCar()
 	mu.popMatrix(gmu::MODEL);
 
 	// ------------------------------------------------------------
-	// EXHAUSTS 
+	// EXHAUSTS
 
 	// Left Exhaust
 	mu.pushMatrix(gmu::MODEL);
@@ -1198,7 +1188,6 @@ void drawCar()
 
 	mu.popMatrix(gmu::MODEL);
 
-
 	// GLASS MATERIAL
 	// ------------------------------------------------------------
 	// FRONT WINDSHIELD
@@ -1232,7 +1221,6 @@ void drawCar()
 
 	mu.popMatrix(gmu::MODEL);
 
-
 	// ------------------------------------------------------------
 	// SIDE WINDOWS
 
@@ -1247,8 +1235,8 @@ void drawCar()
 	// ------------------------------------------------------------
 	// MIRRORS
 
-	drawMirror(-1.0f);  // Right mirror
-	drawMirror(1.0f);   // Left mirror
+	drawMirror(-1.0f); // Right mirror
+	drawMirror(1.0f);  // Left mirror
 
 	glDepthMask(GL_TRUE);
 	glDisable(GL_BLEND);
@@ -1258,7 +1246,6 @@ void drawCar()
 
 	mu.popMatrix(gmu::MODEL);
 }
-
 
 void drawCarAABB()
 {
@@ -1298,43 +1285,41 @@ void drawCarAABB()
 
 // ------------------------------------------------------------
 // Candles Help debugger
-// To Be Deleted !!!
 //
 
-void drawCandles() {
+void drawCandles()
+{
 	CarMaterial candleBase = {
-		{ 0.35f, 0.30f, 0.22f, 1.0f },
-		{ 0.90f, 0.80f, 0.65f, 1.0f },
-		{ 1.00f, 0.90f, 0.75f, 1.0f },
-		40.0f
-	};
+		{0.35f, 0.30f, 0.22f, 1.0f},
+		{0.90f, 0.80f, 0.65f, 1.0f},
+		{1.00f, 0.90f, 0.75f, 1.0f},
+		40.0f};
 
 	CarMaterial candleFire = {
-		{ 0.30f, 0.15f, 0.00f, 1.0f },
-		{ 1.00f, 0.70f, 0.10f, 1.0f },
-		{ 1.00f, 0.90f, 0.50f, 1.0f },
-		100.0f
-	};
+		{0.30f, 0.15f, 0.00f, 1.0f},
+		{1.00f, 0.70f, 0.10f, 1.0f},
+		{1.00f, 0.90f, 0.50f, 1.0f},
+		100.0f};
 
-		for (int i = 0; i < 6; i++){
-			// Cilindro base
-			setMeshMaterial(MESH_CYLINDER, candleBase);
-			mu.pushMatrix(gmu::MODEL);
-			mu.translate(gmu::MODEL, candles[i][0], env.getRoadSurfaceY()+0.7f, candles[i][2]);
-			mu.scale(gmu::MODEL, 0.5f, 0.7f, 0.5f);
-			drawMesh(MESH_CYLINDER);
-			mu.popMatrix(gmu::MODEL);
+	for (int i = 0; i < 6; i++)
+	{
+		// Cilindro base
+		setMeshMaterial(MESH_CYLINDER, candleBase);
+		mu.pushMatrix(gmu::MODEL);
+		mu.translate(gmu::MODEL, candles[i][0], env.getRoadSurfaceY() + 0.7f, candles[i][2]);
+		mu.scale(gmu::MODEL, 0.5f, 0.7f, 0.5f);
+		drawMesh(MESH_CYLINDER);
+		mu.popMatrix(gmu::MODEL);
 
-
-			// Cilindro pequeno (fogo)
-			setMeshMaterial(MESH_CYLINDER, candleFire);
-			mu.pushMatrix(gmu::MODEL);
-			mu.translate(gmu::MODEL, candles[i][0], env.getRoadSurfaceY() +0.7f+0.6f, candles[i][2]);
-			mu.scale(gmu::MODEL, 0.1f, 0.25f, 0.1f);
-			drawMesh(MESH_CYLINDER);
-			mu.popMatrix(gmu::MODEL);
-		}
+		// Cilindro pequeno (fogo)
+		setMeshMaterial(MESH_CYLINDER, candleFire);
+		mu.pushMatrix(gmu::MODEL);
+		mu.translate(gmu::MODEL, candles[i][0], env.getRoadSurfaceY() + 0.7f + 0.6f, candles[i][2]);
+		mu.scale(gmu::MODEL, 0.1f, 0.25f, 0.1f);
+		drawMesh(MESH_CYLINDER);
+		mu.popMatrix(gmu::MODEL);
 	}
+}
 
 void updateCarHeadlights(float headlightsWorld[2][4], float coneDirWorld[4])
 {
@@ -1497,28 +1482,34 @@ void setSceneLights(bool mirrored)
 	float planeY = env.getRoadSurfaceY();
 
 	// Global (direcional, w = 0): basta inverter o Y da direção
-	float gWorld[4] = { globalLightPos[0], globalLightPos[1], globalLightPos[2], globalLightPos[3] };
-	if (mirrored) gWorld[1] = -gWorld[1];
-	float  gloablLightPosEye[4];
-	mu.multMatrixPoint(gmu::VIEW, gWorld,  gloablLightPosEye);
+	float gWorld[4] = {globalLightPos[0], globalLightPos[1], globalLightPos[2], globalLightPos[3]};
+	if (mirrored)
+		gWorld[1] = -gWorld[1];
+	float gloablLightPosEye[4];
+	mu.multMatrixPoint(gmu::VIEW, gWorld, gloablLightPosEye);
 	renderer.setGlobalLight(globalIllumination, gloablLightPosEye);
 
 	// Faróis
 	float carHeadlightsWorld[2][4], coneDirWorld[4], carHeadlightsEye[2][4], coneDirEye[4];
 	updateCarHeadlights(carHeadlightsWorld, coneDirWorld);
-	if (mirrored) {
-		for (int i = 0; i < 2; i++) carHeadlightsWorld[i][1] = 2.0f * planeY - carHeadlightsWorld[i][1];
+	if (mirrored)
+	{
+		for (int i = 0; i < 2; i++)
+			carHeadlightsWorld[i][1] = 2.0f * planeY - carHeadlightsWorld[i][1];
 		coneDirWorld[1] = -coneDirWorld[1];
 	}
-	for (int i = 0; i < 2; i++) mu.multMatrixPoint(gmu::VIEW, carHeadlightsWorld[i], carHeadlightsEye[i]);
+	for (int i = 0; i < 2; i++)
+		mu.multMatrixPoint(gmu::VIEW, carHeadlightsWorld[i], carHeadlightsEye[i]);
 	mu.multMatrixPoint(gmu::VIEW, coneDirWorld, coneDirEye);
 	renderer.setSpotLights(carHeadlights, carHeadlightsEye, coneDirEye, spotCosCutOff);
 
 	// Velas
 	float candlesEye[6][4];
-	for (int i = 0; i < 6; i++) {
-		float p[4] = { candles[i][0], candles[i][1], candles[i][2], 1.0f };
-		if (mirrored) p[1] = 2.0f * planeY - p[1];
+	for (int i = 0; i < 6; i++)
+	{
+		float p[4] = {candles[i][0], candles[i][1], candles[i][2], 1.0f};
+		if (mirrored)
+			p[1] = 2.0f * planeY - p[1];
 		mu.multMatrixPoint(gmu::VIEW, p, candlesEye[i]);
 	}
 	renderer.setCandlesLights(candlesIllumination, candlesEye);
@@ -1527,13 +1518,15 @@ void setSceneLights(bool mirrored)
 // Carro
 void drawCarModel()
 {
-	if (!objVisible) {
+	if (!objVisible)
+	{
 		drawCar();
 		return;
 	}
 
 	dataMesh data;
-	for (unsigned int n = 0; n < renderer.myMeshes.size(); ++n) {
+	for (unsigned int n = 0; n < renderer.myMeshes.size(); ++n)
+	{
 		mu.pushMatrix(gmu::MODEL);
 
 		mu.multMatrix(gmu::MODEL, renderer.myMeshes[n].transform);
@@ -1565,7 +1558,8 @@ void drawObjectsAboveRoad(bool mirrored)
 	drawCandles();
 	env.renderObjects(renderer, mu);
 	drawCarModel();
-	if (!mirrored) drawCarAABB();
+	if (!mirrored)
+		drawCarAABB();
 	env.renderTranslucent(renderer, mu); // orbs por último
 }
 
@@ -1577,14 +1571,13 @@ void drawShadowCasters()
 	drawCarModel();
 }
 
-
 // PRÉ-CONDIÇÃO: stencil já tem mesa=1/estrada=2 marcados (chamar só de dentro de renderSceneWithReflections())
 void renderShadows()
 {
 	const float planeY = env.getRoadSurfaceY();
 
 	// Plano horizontal y = planeY, em coordenadas do mundo: (0,1,0,-planeY)
-	GLfloat plane[4] = { 0.0f, 1.0f, 0.0f, -planeY };
+	GLfloat plane[4] = {0.0f, 1.0f, 0.0f, -planeY};
 
 	// Luz que projeta a sombra: a global (direcional)
 	float shadowMat[16];
@@ -1611,10 +1604,9 @@ void renderShadows()
 	glEnable(GL_DEPTH_TEST);
 }
 
-
 void renderSceneWithReflections()
 {
-	const float  planeY  = env.getRoadSurfaceY();          // Topo da Estrada
+	const float planeY = env.getRoadSurfaceY(); // Topo da Estrada
 
 	// Stencil: mesa = 1,  estrada = 2
 	glEnable(GL_STENCIL_TEST);
@@ -1652,7 +1644,7 @@ void renderSceneWithReflections()
 	glStencilFunc(GL_EQUAL, 0x2, 0xFF);
 	env.renderRoad(renderer, mu, ROAD_REFLECTION_ALPHA);
 
-	glDepthMask(GL_TRUE);  // Restaura a escrita no Depth Buffer (REVER N PERCEBI TODO:ELEMINAR COMMENT)
+	glDepthMask(GL_TRUE); // Restaura a escrita no Depth Buffer (REVER N PERCEBI TODO:ELEMINAR COMMENT)
 	glDisable(GL_BLEND);
 
 	renderShadows(); // SOMBRAS PLANARES (reaproveita as marcas de stencil: mesa=1, estrada=2)
@@ -1690,7 +1682,10 @@ void renderSim(void)
 	{
 		env.update(dt);
 		updateCar(dt);
-		if (scoreChangeTimer > 0.0f) { scoreChangeTimer -= dt; }
+		if (scoreChangeTimer > 0.0f)
+		{
+			scoreChangeTimer -= dt;
+		}
 	}
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
@@ -1726,7 +1721,7 @@ void renderSim(void)
 	if (camY > env.getRoadSurfaceY())
 	{
 		renderSceneWithReflections();
-	} 
+	}
 	else
 	{
 		env.renderTable(renderer, mu, 1.0f);
@@ -1751,47 +1746,50 @@ void renderSim(void)
 		mu.loadIdentity(gmu::PROJECTION);
 		mu.ortho(m_viewport[0], m_viewport[0] + m_viewport[2] - 1, m_viewport[1], m_viewport[1] + m_viewport[3] - 1, -1, 1);
 		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-		float* hudPvm = mu.get(gmu::PROJ_VIEW_MODEL);
-		
+		float *hudPvm = mu.get(gmu::PROJ_VIEW_MODEL);
+
 		// Vidas (canto superior esquerdo)
 		std::ostringstream livesStream;
 		livesStream << "Lives: " << lives;
 
-		TextCommand livesCmd = { livesStream.str(), {20.0f, WinY - 40.0f}, 0.4f };
+		TextCommand livesCmd = {livesStream.str(), {20.0f, WinY - 40.0f}, 0.4f};
 		livesCmd.pvm = hudPvm;
 		renderer.renderText(livesCmd);
 
 		// Pontos (logo abaixo das vidas)
 		std::ostringstream pointsStream;
 		pointsStream << "Score: " << points;
-		if (scoreChangeTimer > 0.0f) {
+		if (scoreChangeTimer > 0.0f)
+		{
 			pointsStream << "  (" << (lastScoreChange > 0 ? "+" : "") << lastScoreChange << ")";
 		}
-		TextCommand pointsCmd = { pointsStream.str(), {20.0f, WinY - 70.0f}, 0.4f };
+		TextCommand pointsCmd = {pointsStream.str(), {20.0f, WinY - 70.0f}, 0.4f};
 		pointsCmd.pvm = hudPvm;
 		renderer.renderText(pointsCmd);
 
 		// Mensagens centrais: Game Over e Paused
 		if (!gameStarted)
 		{
-			TextCommand menuCmd = { std::string("AVTM Racing 2026!\nPress R to start!"), 
-									{WinX / 2.0f - 150.0f, WinY / 2.0f}, 0.6f };
+			TextCommand menuCmd = {std::string("AVTM Racing 2026!\nPress R to start!"),
+								   {WinX / 2.0f - 150.0f, WinY / 2.0f},
+								   0.6f};
 			menuCmd.pvm = hudPvm;
 			renderer.renderText(menuCmd);
 		}
 		else if (gameOver)
 		{
 			std::ostringstream gameOverStream;
-    		gameOverStream << "GAME OVER\nScore: " << points << "\nPress R to restart";
-			TextCommand gameOverCmd = { gameOverStream.str(), {WinX / 2.0f - 150.0f, WinY / 2.0f}, 0.6f };
+			gameOverStream << "GAME OVER\nScore: " << points << "\nPress R to restart";
+			TextCommand gameOverCmd = {gameOverStream.str(), {WinX / 2.0f - 150.0f, WinY / 2.0f}, 0.6f};
 
 			gameOverCmd.pvm = hudPvm;
 			renderer.renderText(gameOverCmd);
 		}
 		else if (paused)
 		{
-			TextCommand pausedCmd = { std::string("PAUSED\nPress P to resume"),
-									{WinX / 2.0f - 150.0f, WinY / 2.0f}, 0.5f };
+			TextCommand pausedCmd = {std::string("PAUSED\nPress P to resume"),
+									 {WinX / 2.0f - 150.0f, WinY / 2.0f},
+									 0.5f};
 			pausedCmd.pvm = hudPvm;
 			renderer.renderText(pausedCmd);
 		}
@@ -1850,12 +1848,16 @@ void processKeys(unsigned char key, int xx, int yy)
 		break;
 	case 'r':
 	case 'R':
-		if (!gameStarted) { gameStarted = true; }
-		else if (gameOver) {
+		if (!gameStarted)
+		{
+			gameStarted = true;
+		}
+		else if (gameOver)
+		{
 			lives = MAX_LIVES;
 			points = 0;
 			lastScoreChange = 0;
-        	scoreChangeTimer = 0.0f;
+			scoreChangeTimer = 0.0f;
 			gameOver = false;
 			resetCarToStart();
 			env.resetPointOrbs();
@@ -1921,7 +1923,7 @@ void processKeys(unsigned char key, int xx, int yy)
 	case 'O':
 	case 'o':
 		objVisible = !objVisible;
-		updateCarBounds();         
+		updateCarBounds();
 		updateCarAABB();
 
 		printf("OBJ Visibility [%d]\n", objVisible);
@@ -2085,12 +2087,12 @@ void buildScene()
 	renderer.TexObjArray.texture2D_Loader("assets/lightwood.tga"); // 2
 
 	// Minhas texturas (3, 4, 5, 6)
-	renderer.TexObjArray.texture2D_Loader("assets/table.jpg");       // 3
-	renderer.TexObjArray.texture2D_Loader("assets/road.jpg");        // 4
-	renderer.TexObjArray.texture2D_Loader("assets/finishline.jpg");  // 5
-	renderer.TexObjArray.texture2D_Loader("assets/orange.jpg");      // 6
-	renderer.TexObjArray.texture2D_Loader("assets/tire.png");        // 7
-	renderer.TexObjArray.texture2D_Loader("assets/license.png");     // 8
+	renderer.TexObjArray.texture2D_Loader("assets/table.jpg");		// 3
+	renderer.TexObjArray.texture2D_Loader("assets/road.jpg");		// 4
+	renderer.TexObjArray.texture2D_Loader("assets/finishline.jpg"); // 5
+	renderer.TexObjArray.texture2D_Loader("assets/orange.jpg");		// 6
+	renderer.TexObjArray.texture2D_Loader("assets/tire.png");		// 7
+	renderer.TexObjArray.texture2D_Loader("assets/license.png");	// 8
 
 	// Scene geometry with triangle meshes
 
@@ -2178,12 +2180,12 @@ void buildScene()
 
 	// Import .obj after all the original meshes
 	std::string filepath = "assets/models/minicooper.obj";
-	//import 3D file into Assimp scene graph
+	// import 3D file into Assimp scene graph
 	if (!Import3DFromFile(filepath, importer, scene, scaleFactor))
 		exit(0);
-	//creation of Mymesh array with VAO Geometry and Material and array of Texture Objs for the model input by the user
+	// creation of Mymesh array with VAO Geometry and Material and array of Texture Objs for the model input by the user
 	createMyMeshFromAssimp(scene, &renderer);
-	
+
 	// The truetypeInit creates a texture object in TexObjArray for storing the fontAtlasTexture
 
 	fontLoaded = renderer.truetypeInit(fontPathFile);
