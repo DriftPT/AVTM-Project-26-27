@@ -163,6 +163,8 @@ public:
                (a.minZ <= b.maxZ && a.maxZ >= b.minZ);
     }
 
+    void gameOver() { totalPlayTime = 0.0f; }
+
 private:
     Config cfg;
     float totalPlayTime = 0.0f;

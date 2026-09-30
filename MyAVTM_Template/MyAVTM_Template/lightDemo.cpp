@@ -1628,7 +1628,7 @@ void renderSceneWithReflections()
 	// Mesa e estrada semi-transparentes (blending) por cima do reflexo
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glDepthMask(GL_FALSE); // não bloquear a escrita no Depth Buffer  (REVER N PERCEBI TODO:ELEMINAR COMMENT)
+	glDepthMask(GL_FALSE); // não bloquear a escrita no Depth Buffer
 
 	glStencilFunc(GL_EQUAL, 0x1, 0xFF);
 	env.renderTable(renderer, mu, TABLE_REFLECTION_ALPHA);
@@ -1636,7 +1636,7 @@ void renderSceneWithReflections()
 	glStencilFunc(GL_EQUAL, 0x2, 0xFF);
 	env.renderRoad(renderer, mu, ROAD_REFLECTION_ALPHA);
 
-	glDepthMask(GL_TRUE); // Restaura a escrita no Depth Buffer (REVER N PERCEBI TODO:ELEMINAR COMMENT)
+	glDepthMask(GL_TRUE); // Restaura a escrita no Depth Buffer
 	glDisable(GL_BLEND);
 
 	renderShadows(); // SOMBRAS PLANARES (reaproveita as marcas de stencil: mesa=1, estrada=2)
@@ -1850,6 +1850,7 @@ void processKeys(unsigned char key, int xx, int yy)
 			points = 0;
 			lastScoreChange = 0;
 			scoreChangeTimer = 0.0f;
+			env.gameOver();
 			gameOver = false;
 			resetCarToStart();
 			env.resetPointOrbs();
