@@ -224,9 +224,9 @@ void main() {
 			dist = length(DataIn.eye);
 		}
 
-		float fogAmount = exp(-dist * 0.025);
+		float fogAmount = exp(-dist * 0.025);  // 1 = sem nevoeiro, 0 = só nevoeiro
 		if (texMode == 4)
-			colorOut.rgb = mix(vec3(1.0), colorOut.rgb, fogAmount); // sombra desvanece para "neutro", não para o céu
+			colorOut.rgb = mix(vec3(1.0), colorOut.rgb, fogAmount); // sombra desvanece para "neutro", para não ficar com manchas pretas
 		else
 			colorOut.rgb = mix(fogColor, colorOut.rgb, fogAmount);
 	}

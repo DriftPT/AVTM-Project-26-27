@@ -1563,7 +1563,7 @@ void drawShadowCasters()
 	drawCarModel();
 }
 
-// PRÉ-CONDIÇÃO: stencil já tem mesa=1/estrada=2 marcados (chamar só de dentro de renderSceneWithReflections())
+// chamar só de dentro de renderSceneWithReflections()
 void renderShadows()
 {
 	const float planeY = env.getRoadSurfaceY();
@@ -1571,19 +1571,19 @@ void renderShadows()
 	// Plano horizontal y = planeY, em coordenadas do mundo: (0,1,0,-planeY)
 	GLfloat plane[4] = {0.0f, 1.0f, 0.0f, -planeY};
 
-	// Luz que projeta a sombra: a global (direcional)
+	// Luz que projeta a sombra, a global (direcional)
 	float shadowMat[16];
 	mu.shadow_matrix(shadowMat, plane, globalLightPos);
 
-	// Desenha onde o stencil marca mesa OU estrada (>=1)
+	// Desenha onde o stencil marca mesa ou estrada (>=1) -> stencil já tem mesa=1/estrada=2 marcado
 	glStencilFunc(GL_LEQUAL, 0x1, 0xFF);
-	glStencilOp(GL_KEEP, GL_KEEP, GL_ZERO); // ao desenhar aqui, "consome" a marca (evita redesenhar)
+	glStencilOp(GL_KEEP, GL_KEEP, GL_ZERO); // ao desenhar aqui, "consome" a marca (evita enscurecimento duplo)
 
-	glDisable(GL_DEPTH_TEST); // força a sombra a aparecer mesmo achatada contra o chão
+	glDisable(GL_DEPTH_TEST); // força a sombra a aparecer achatada contra o chão ("ignora" z-buffer)
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_DST_COLOR, GL_ZERO); // escurece multiplicativamente o que já lá estiver
 
-	renderer.forceConstantShading = true;
+	renderer.forceConstantShading = true;  // texMode = 4 no shader
 
 	mu.pushMatrix(gmu::MODEL);
 	mu.multMatrix(gmu::MODEL, shadowMat);
@@ -1617,7 +1617,7 @@ void renderSceneWithReflections()
 	mu.translate(gmu::MODEL, 0.0f, planeY, 0.0f);
 	mu.scale(gmu::MODEL, 1.0f, -1.0f, 1.0f);
 	mu.translate(gmu::MODEL, 0.0f, -planeY, 0.0f);
-	glCullFace(GL_FRONT);
+	glCullFace(GL_FRONT); // Inverte a face culling para que o reflexo seja desenhado
 	drawObjectsAboveRoad(true);
 	glCullFace(GL_BACK);
 	mu.popMatrix(gmu::MODEL);
@@ -1628,7 +1628,7 @@ void renderSceneWithReflections()
 	// Mesa e estrada semi-transparentes (blending) por cima do reflexo
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glDepthMask(GL_FALSE); // não bloquear a escrita no Depth Buffer
+	glDepthMask(GL_FALSE); // Desativa a escrita no Depth Buffer para não apagar o reflexo
 
 	glStencilFunc(GL_EQUAL, 0x1, 0xFF);
 	env.renderTable(renderer, mu, TABLE_REFLECTION_ALPHA);
