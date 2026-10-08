@@ -57,6 +57,18 @@ struct GestureTracker {
     bool stopActive = false;
     int releaseFrames = 0;
 
+    void onLost() {
+        if (stopActive) {            // não deixar o jogo preso em pausa
+            g_udp.send("RESUME");
+            stopActive = false;
+            releaseFrames = 0;
+        }
+        has_prev = false;
+        cooldown = 0;
+        holdFrames = 0;
+        releaseFrames = 0;
+    }
+
     void process(const k4a_float3_t& hand, const k4a_float3_t& shoulder) {
         float x = hand.xyz.x;
         if (!has_prev) {
@@ -182,10 +194,14 @@ int main() {
 
                     k4a_float3_t hand = body.skeleton.joints[K4ABT_JOINT_HAND_RIGHT].position;
                     k4a_float3_t shoulder = body.skeleton.joints[K4ABT_JOINT_SHOULDER_RIGHT].position;
-                    k4abt_joint_confidence_level_t confidence = body.skeleton.joints[K4ABT_JOINT_HAND_RIGHT].confidence_level;
+                    k4abt_joint_confidence_level_t hand_conf = body.skeleton.joints[K4ABT_JOINT_HAND_RIGHT].confidence_level;
+                    k4abt_joint_confidence_level_t shoulder_conf = body.skeleton.joints[K4ABT_JOINT_SHOULDER_RIGHT].confidence_level;
+                    bool confidence_ok = hand_conf >= K4ABT_JOINT_CONFIDENCE_LOW && shoulder_conf >= K4ABT_JOINT_CONFIDENCE_LOW;
 
-                    if (confidence >= K4ABT_JOINT_CONFIDENCE_LOW) {
+                    if (confidence_ok) {
                         gesture_engine.process(hand, shoulder);
+                    } else{
+                        gesture_engine.onLost();
                     }
                 }
                 k4abt_frame_release(body_frame);
