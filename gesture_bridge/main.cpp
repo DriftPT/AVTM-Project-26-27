@@ -29,12 +29,14 @@ struct UdpSender {
     sockaddr_in addr{};
 
     bool init(const char* ip, unsigned short port) {
+        // inicializa Winsock (Como é windows, é necessário)
         WSADATA w;
         if (WSAStartup(MAKEWORD(2, 2), &w) != 0) return false;
-        s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+        s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP); // cria o socket UDP
         if (s == INVALID_SOCKET) return false;
         addr.sin_family = AF_INET;
-        addr.sin_port = htons(port);
+        addr.sin_port = htons(port);  // converte o port para network byte order
         inet_pton(AF_INET, ip, &addr.sin_addr);
         return true;
     }
@@ -77,7 +79,7 @@ struct GestureTracker {
             return;
         }
 
-        // --- Estado do STOP (avaliado sempre, mesmo em cooldown) ---
+        // Estado do STOP (avaliado sempre, mesmo em cooldown)
         float forward = shoulder.xyz.z - hand.xyz.z;
         float heightDiff = fabsf(hand.xyz.y - shoulder.xyz.y);
         bool armExtended = (forward > STOP_FORWARD_MM) && (heightDiff < STOP_HEIGHT_TOL);
@@ -120,7 +122,7 @@ struct GestureTracker {
         }
         holdFrames = 0;
 
-        // --- SWIPES (janela de tempo) ---
+        // SWIPES (janela de tempo)
         float delta_x = x - prev_x;
         if (delta_x < -SWIPE_VELOCITY_THRESHOLD) {
             std::cout << "\n>>> [GESTURE] SWIPE RIGHT -> camara seguinte <<<\n";

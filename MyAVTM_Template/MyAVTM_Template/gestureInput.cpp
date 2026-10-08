@@ -24,7 +24,7 @@ bool gestureInput::init(unsigned short port)
 		return false;
 
 	u_long nonBlocking = 1;
-	ioctlsocket(sock, FIONBIO, &nonBlocking);
+	ioctlsocket(sock, FIONBIO, &nonBlocking); // define o socket como não bloqueante
 
 	sockaddr_in a{};
 	a.sin_family = AF_INET;
