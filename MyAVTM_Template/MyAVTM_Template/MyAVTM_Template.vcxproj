@@ -157,6 +157,7 @@
   <ItemGroup>
     <ClInclude Include="cube.h" />
     <ClInclude Include="environment.h" />
+    <ClInclude Include="gestureInput.h" />
     <ClInclude Include="mathUtility.h" />
     <ClInclude Include="meshFromAssimp.h" />
     <ClInclude Include="model.h" />
@@ -169,6 +170,7 @@
   <ItemGroup>
     <ClCompile Include="basic_geometry.cpp" />
     <ClCompile Include="environment.cpp" />
+    <ClCompile Include="gestureInput.cpp" />
     <ClCompile Include="lightDemo.cpp" />
     <ClCompile Include="mathUtility.cpp" />
     <ClCompile Include="meshFromAssimp.cpp" />

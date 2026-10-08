@@ -36,6 +36,7 @@ add_executable(GestureApp main.cpp)
 target_link_libraries(GestureApp PRIVATE
     k4a
     k4abt
+    ws2_32
 )
 
 # 4. Post-build: copia todas as DLLs e modelos .onnx da pasta tools

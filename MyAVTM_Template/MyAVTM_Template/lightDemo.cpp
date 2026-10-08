@@ -17,6 +17,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include "gestureInput.h"
 
 // include GLEW to access OpenGL 3.3 functions
 #include <GL/glew.h>
@@ -1649,10 +1650,13 @@ void renderSceneWithReflections()
 	drawObjectsAboveRoad(false);
 }
 
+void handleGestures(); // defined in Events from the Keyboard
+
 // Render the simulation scene
 void renderSim(void)
 {
 	FrameCount++;
+	handleGestures();
 
 	// CAR UPDATE / DELTA TIME
 	int currentTime = glutGet(GLUT_ELAPSED_TIME);
@@ -1948,6 +1952,37 @@ void processKeysUp(unsigned char key, int xx, int yy)
 	case 'D':
 		keyD = false;
 		break;
+	}
+}
+
+void handleGestures()
+{
+	GestureCmd c;
+	while ((c = gestureInput::poll()) != GestureCmd::None)
+	{
+		switch (c)
+		{
+		case GestureCmd::CamNext:
+		case GestureCmd::CamPrev:
+		{
+			// modo atual: 1 = topo ortogonal, 2 = topo perspetiva, 3 = atrás do carro
+			int mode = trackingCamera ? 3 : (orthoProj ? 1 : 2);
+			if (c == GestureCmd::CamNext)
+				mode = (mode % 3) + 1;
+			else
+				mode = (mode == 1) ? 3 : mode - 1;
+			processKeys((unsigned char)('0' + mode), 0, 0);
+			break;
+		}
+		case GestureCmd::Pause:
+			paused = true;
+			break;
+		case GestureCmd::Resume:
+			paused = false;
+			break;
+		default:
+			break;
+		}
 	}
 }
 
@@ -2256,7 +2291,7 @@ int main(int argc, char **argv)
 		exit(0);
 	}
 	ilInit();
-
+	gestureInput::init(); // initialize gesture input system
 	buildScene();
 
 	if (!renderer.setRenderMeshesShaderProg("shaders/mesh.vert", "shaders/mesh.frag") ||
@@ -2265,6 +2300,7 @@ int main(int argc, char **argv)
 
 	//  GLUT main loop
 	glutMainLoop();
+	gestureInput::shutdown(); // shutdown gesture input system
 
 	return (0);
 }

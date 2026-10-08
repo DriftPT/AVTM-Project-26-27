@@ -2,6 +2,9 @@
 #include <chrono>
 #include <cmath>
 #include <algorithm>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <cstring>
 #include <k4a/k4a.h>
 #include <k4abt.h>
 
@@ -13,63 +16,118 @@ const float X_MAX =  250.0f;
 const float Y_MIN = -150.0f; 
 const float Y_MAX =  250.0f; 
 
-const float PUSH_DEPTH_THRESHOLD = 40.0f;    
-const float SWIPE_VELOCITY_THRESHOLD = 50.0f; 
-const int GESTURE_COOLDOWN_FRAMES = 15;      
+const float SWIPE_VELOCITY_THRESHOLD = 50.0f;  // mm por frame (30 fps)
+const int   GESTURE_COOLDOWN_FRAMES = 30;  // ~1 s: cobre o retorno da mão
+
+const float STOP_FORWARD_MM   = 350.0f;  // quanto a mão tem de estar à frente do ombro
+const float STOP_HEIGHT_TOL   = 150.0f;  // tolerância vertical mão/ombro (mm)
+const int   STOP_HOLD_FRAMES  = 15;      // ~0,5 s a 30 fps
+const int   STOP_RELEASE_FRAMES = 6;
+
+struct UdpSender {
+    SOCKET s = INVALID_SOCKET;
+    sockaddr_in addr{};
+
+    bool init(const char* ip, unsigned short port) {
+        WSADATA w;
+        if (WSAStartup(MAKEWORD(2, 2), &w) != 0) return false;
+        s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (s == INVALID_SOCKET) return false;
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(port);
+        inet_pton(AF_INET, ip, &addr.sin_addr);
+        return true;
+    }
+    void send(const char* msg) {
+        if (s != INVALID_SOCKET)
+            sendto(s, msg, (int)strlen(msg), 0, (sockaddr*)&addr, sizeof(addr));
+    }
+    ~UdpSender() {
+        if (s != INVALID_SOCKET) closesocket(s);
+        WSACleanup();
+    }
+};
+UdpSender g_udp;
 
 struct GestureTracker {
     float prev_x = 0.0f;
-    float prev_z = 0.0f;
     bool has_prev = false;
     int cooldown = 0;
+    int holdFrames = 0;
+    bool stopActive = false;
+    int releaseFrames = 0;
 
-    void process(float x, float y, float z) {
-        float norm_x = (x - X_MIN) / (X_MAX - X_MIN);
-        float norm_y = (y - Y_MIN) / (Y_MAX - Y_MIN);
-
-        norm_x = std::max(0.0f, std::min(1.0f, norm_x));
-        norm_y = std::max(0.0f, std::min(1.0f, norm_y));
-
-        int cursor_x = static_cast<int>(norm_x * SCREEN_WIDTH);
-        int cursor_y = static_cast<int>((1.0f - norm_y) * SCREEN_HEIGHT);
-
-        std::cout << "Cursor: (" << cursor_x << ", " << cursor_y << ") | Hand Z: " << z << " mm\r" << std::flush;
-
+    void process(const k4a_float3_t& hand, const k4a_float3_t& shoulder) {
+        float x = hand.xyz.x;
         if (!has_prev) {
             prev_x = x;
-            prev_z = z;
             has_prev = true;
             return;
+        }
+
+        // --- Estado do STOP (avaliado sempre, mesmo em cooldown) ---
+        float forward = shoulder.xyz.z - hand.xyz.z;
+        float heightDiff = fabsf(hand.xyz.y - shoulder.xyz.y);
+        bool armExtended = (forward > STOP_FORWARD_MM) && (heightDiff < STOP_HEIGHT_TOL);
+
+        if (stopActive) {
+            // Já em pausa: só verifica se o braço baixou
+            if (!armExtended) {
+                releaseFrames++;
+                if (releaseFrames >= STOP_RELEASE_FRAMES) {
+                    std::cout << "\n>>> [GESTURE] STOP ENDED (RESUME) <<<\n";
+                    g_udp.send("RESUME");
+                    stopActive = false;
+                    releaseFrames = 0;
+                    cooldown = GESTURE_COOLDOWN_FRAMES;
+                }
+            } else {
+                releaseFrames = 0;
+            }
+            return;   // enquanto o stop está ativo, ignora swipes
         }
 
         if (cooldown > 0) {
             cooldown--;
             prev_x = x;
-            prev_z = z;
+            holdFrames = 0;
             return;
         }
 
-        float delta_z = prev_z - z; 
-        if (delta_z > PUSH_DEPTH_THRESHOLD) {
-            std::cout << "\n>>> [GESTURE] PUSH CLICK at (" << cursor_x << ", " << cursor_y << ") <<<\n";
-            cooldown = GESTURE_COOLDOWN_FRAMES;
+        if (armExtended) {
+            holdFrames++;
+            if (holdFrames >= STOP_HOLD_FRAMES) {
+                std::cout << "\n>>> [GESTURE] STOP (PAUSE) <<<\n";
+                g_udp.send("PAUSE");
+                stopActive = true;
+                holdFrames = 0;
+                releaseFrames = 0;
+            }
+            prev_x = x;
+            return;
         }
+        holdFrames = 0;
 
+        // --- SWIPES (janela de tempo) ---
         float delta_x = x - prev_x;
-        if (delta_x > SWIPE_VELOCITY_THRESHOLD) {
-            std::cout << "\n>>> [GESTURE] SWIPE RIGHT <<<\n";
+        if (delta_x < -SWIPE_VELOCITY_THRESHOLD) {
+            std::cout << "\n>>> [GESTURE] SWIPE RIGHT -> camara seguinte <<<\n";
+            g_udp.send("CAM_NEXT");
             cooldown = GESTURE_COOLDOWN_FRAMES;
-        } else if (delta_x < -SWIPE_VELOCITY_THRESHOLD) {
-            std::cout << "\n>>> [GESTURE] SWIPE LEFT <<<\n";
+        } else if (delta_x > SWIPE_VELOCITY_THRESHOLD) {
+            std::cout << "\n>>> [GESTURE] SWIPE LEFT -> camara anterior <<<\n";
+            g_udp.send("CAM_PREV");
             cooldown = GESTURE_COOLDOWN_FRAMES;
         }
 
         prev_x = x;
-        prev_z = z;
     }
 };
 
 int main() {
+    if (!g_udp.init("127.0.0.1", 5005))
+    std::cerr << "Falha a iniciar UDP (os gestos so vao aparecer na consola).\n";
+
     k4a_device_t device = NULL;
     if (K4A_RESULT_SUCCEEDED != k4a_device_open(0, &device)) {
         std::cerr << "Failed to open Femto Bolt camera.\n";
@@ -123,10 +181,11 @@ int main() {
                     k4abt_frame_get_body_skeleton(body_frame, 0, &body.skeleton);
 
                     k4a_float3_t hand = body.skeleton.joints[K4ABT_JOINT_HAND_RIGHT].position;
+                    k4a_float3_t shoulder = body.skeleton.joints[K4ABT_JOINT_SHOULDER_RIGHT].position;
                     k4abt_joint_confidence_level_t confidence = body.skeleton.joints[K4ABT_JOINT_HAND_RIGHT].confidence_level;
 
                     if (confidence >= K4ABT_JOINT_CONFIDENCE_LOW) {
-                        gesture_engine.process(hand.xyz.x, hand.xyz.y, hand.xyz.z);
+                        gesture_engine.process(hand, shoulder);
                     }
                 }
                 k4abt_frame_release(body_frame);

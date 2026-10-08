@@ -45,6 +45,9 @@
     <ClInclude Include="meshFromAssimp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="gestureInput.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="basic_geometry.cpp">
@@ -69,6 +72,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="meshFromAssimp.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="gestureInput.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
