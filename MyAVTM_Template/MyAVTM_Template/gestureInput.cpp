@@ -56,10 +56,10 @@ GestureCmd gestureInput::poll()
 	buf[n] = '\0';
 	std::string cmd(buf);
 
-	if (cmd == "CAM_NEXT") return GestureCmd::CamNext;
-	if (cmd == "CAM_PREV") return GestureCmd::CamPrev;
-	if (cmd == "PAUSE")    return GestureCmd::Pause;
-	if (cmd == "RESUME")   return GestureCmd::Resume;
+	if (cmd == "PAUSE")       return GestureCmd::Pause;
+	if (cmd == "RESUME")      return GestureCmd::Resume;
+	if (cmd == "CANDLES_ON")  return GestureCmd::CandlesOn;
+	if (cmd == "CANDLES_OFF") return GestureCmd::CandlesOff;
 	return GestureCmd::None;
 }
 

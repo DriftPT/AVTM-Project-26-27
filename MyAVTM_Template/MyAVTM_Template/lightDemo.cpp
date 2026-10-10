@@ -1962,18 +1962,12 @@ void handleGestures()
 	{
 		switch (c)
 		{
-		case GestureCmd::CamNext:
-		case GestureCmd::CamPrev:
-		{
-			// modo atual: 1 = topo ortogonal, 2 = topo perspetiva, 3 = atrás do carro
-			int mode = trackingCamera ? 3 : (orthoProj ? 1 : 2);
-			if (c == GestureCmd::CamNext)
-				mode = (mode % 3) + 1;
-			else
-				mode = (mode == 1) ? 3 : mode - 1;
-			processKeys((unsigned char)('0' + mode), 0, 0);
+		case GestureCmd::CandlesOn:  
+			candlesIllumination = true;  
 			break;
-		}
+		case GestureCmd::CandlesOff: 
+			candlesIllumination = false;
+			break;
 		case GestureCmd::Pause:
 			paused = true;
 			break;

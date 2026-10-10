@@ -1,7 +1,7 @@
 #ifndef _gestureInput_
 #define _gestureInput_
 
-enum class GestureCmd { None, CamNext, CamPrev, Pause, Resume };
+enum class GestureCmd { None, Pause, Resume, CandlesOn, CandlesOff };
 
 namespace gestureInput
 {
