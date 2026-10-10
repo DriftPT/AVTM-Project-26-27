@@ -7,17 +7,23 @@
 #include <k4a/k4a.h>
 #include <k4abt.h>
 
-// ---- STOP (braço esticado) ----
-const float STOP_FORWARD_MM     = 350.0f;  // quanto a mão tem de estar à frente do ombro
-const float STOP_HEIGHT_TOL     = 150.0f;  // tolerância vertical mão/ombro (mm)
-const int   STOP_HOLD_FRAMES    = 15;      // ~0,5 s a 30 fps
-const int   STOP_RELEASE_FRAMES = 6;
+// ---- PLACAS (vermelha = PAUSE, azul claro = RESUME) ----
+const int   STOP_HOLD_FRAMES    = 5;       // frames com a placa vermelha para pausar (~0,16 s a 30 fps)
+const int   RESUME_HOLD_FRAMES  = 5;       // frames com a placa azul para retomar
+
+const float SIGN_FRONT_MM       = 150.0f;  // pixel tem de estar pelo menos isto mais perto da câmara que o ombro
+const float SIGN_BOX_HALF_W_MM  = 450.0f;  // zona à volta do ombro (largura/2)
+const float SIGN_BOX_HALF_H_MM  = 350.0f;  // zona à volta do ombro (altura/2)
+const float SIGN_MIN_AREA_CM2   = 60.0f;   // área mínima de cor para contar como placa
+const bool  DEBUG_SIGN          = false;    // imprime as áreas de vermelho e azul (quando > 5 cm2)
+const int   COLOR_EXPOSURE_US   = 16670;   // exposição fixa (µs). 2500 deixava as placas quase pretas; sobe/desce conforme a corMedia
+const bool  DEBUG_STATUS        = false;    // imprime SEMPRE (3x/s) o estado de cada passo da deteção
 
 // ---- CHAMA (vela / isqueiro) ----
 const int FLAME_MIN_PIXELS  = 8;   // para acender
 const int FLAME_KEEP_PIXELS = 3;   // para manter acesa
 const int FLAME_ON_FRAMES   = 3;   // frames seguidos acima de MIN para ligar (anti-ruído)
-const int FLAME_OFF_FRAMES  = 10;  // frames seguidos abaixo de KEEP para desligar (~0,3 s, a chama tremeluz)
+const int FLAME_OFF_FRAMES  = 10;  // frames seguidos abaixo de KEEP para desligar (~0,3 s)
 
 struct UdpSender {
     SOCKET s = INVALID_SOCKET;
@@ -46,60 +52,131 @@ struct UdpSender {
 };
 UdpSender g_udp;
 
-// ===================== STOP =====================
-struct GestureTracker {
-    int holdFrames = 0;
-    bool stopActive = false;
-    int releaseFrames = 0;
+// ===================== PLACAS =====================
 
-    void onLost() {
-        if (stopActive) {            // não deixar o jogo preso em pausa
-            g_udp.send("RESUME");
-            stopActive = false;
+// Vermelho dominante (relativo, funciona com exposição baixa).
+static inline bool isRedPixel(const uint8_t* p) {
+    int b = p[0], g = p[1], r = p[2];
+    return r >= 40 && r >= 2 * g && r >= 2 * b;
+}
+
+// Azul claro: B é o canal mais forte, G pode ser alto (ciano/azul céu), R é o mais baixo.
+// A pele (R > B) e a chama (R alto) não passam.
+static inline bool isBluePixel(const uint8_t* p) {
+    int b = p[0], g = p[1], r = p[2];
+    return b >= 40 && b >= r + 20 && b >= g;
+}
+
+struct SignAreas {
+    float red = 0.0f;
+    float blue = 0.0f;
+    // --- só para debug ---
+    float pxPerMm = 0.0f;                 // 0 = a projeção do ombro para a imagem falhou
+    int   frontPx = 0;                    // pixels com profundidade válida e à frente do ombro
+    float avgR = 0, avgG = 0, avgB = 0;   // cor média desses pixels
+};
+
+// Áreas (cm2) de vermelho e de azul que estão MAIS PERTO da câmara do que o ombro.
+// depthInColor = mapa de profundidade alinhado com a imagem de cor.
+static SignAreas signAreasInFrontOfShoulder(k4a_image_t color, k4a_image_t depthInColor,
+                                            const k4a_calibration_t& cal, const k4a_float3_t& shoulder) {
+    SignAreas out;
+
+    k4a_float3_t ref = shoulder;
+    ref.xyz.x += 100.0f;   // ponto 100 mm ao lado, para medir pixels por mm
+
+    k4a_float2_t c{}, r{};
+    int v1 = 0, v2 = 0;
+    if (K4A_RESULT_SUCCEEDED != k4a_calibration_3d_to_2d(&cal, &shoulder, K4A_CALIBRATION_TYPE_DEPTH,
+                                                         K4A_CALIBRATION_TYPE_COLOR, &c, &v1) || !v1) return out;
+    if (K4A_RESULT_SUCCEEDED != k4a_calibration_3d_to_2d(&cal, &ref, K4A_CALIBRATION_TYPE_DEPTH,
+                                                         K4A_CALIBRATION_TYPE_COLOR, &r, &v2) || !v2) return out;
+
+    float pxPerMm = hypotf(r.xy.x - c.xy.x, r.xy.y - c.xy.y) / 100.0f;
+    if (pxPerMm <= 0.0f) return out;
+
+    int halfW = (int)(SIGN_BOX_HALF_W_MM * pxPerMm);
+    int halfH = (int)(SIGN_BOX_HALF_H_MM * pxPerMm);
+
+    const uint8_t* cbuf = k4a_image_get_buffer(color);
+    int w = k4a_image_get_width_pixels(color);
+    int h = k4a_image_get_height_pixels(color);
+    int cstride = k4a_image_get_stride_bytes(color);
+
+    const uint8_t* dbuf = k4a_image_get_buffer(depthInColor);
+    int dstride = k4a_image_get_stride_bytes(depthInColor);
+
+    int x0 = (std::max)(0, (int)c.xy.x - halfW), x1 = (std::min)(w, (int)c.xy.x + halfW);
+    int y0 = (std::max)(0, (int)c.xy.y - halfH), y1 = (std::min)(h, (int)c.xy.y + halfH);
+    if (x1 <= x0 || y1 <= y0) return out;
+
+    float maxDepth = shoulder.xyz.z - SIGN_FRONT_MM;   // só pixels mais perto que isto
+    int redCount = 0, blueCount = 0, frontCount = 0;
+    long sumR = 0, sumG = 0, sumB = 0;
+    for (int y = y0; y < y1; ++y) {
+        const uint8_t* crow = cbuf + (size_t)y * cstride;
+        const uint16_t* drow = (const uint16_t*)(dbuf + (size_t)y * dstride);
+        for (int x = x0; x < x1; ++x) {
+            uint16_t d = drow[x];
+            if (d == 0 || d > maxDepth) continue;       // sem profundidade ou ao nível do corpo
+            const uint8_t* p = crow + x * 4;
+            ++frontCount;
+            sumB += p[0]; sumG += p[1]; sumR += p[2];
+            if (isRedPixel(p))       ++redCount;
+            else if (isBluePixel(p)) ++blueCount;
         }
-        holdFrames = 0;
-        releaseFrames = 0;
+    }
+    out.pxPerMm = pxPerMm;
+    out.frontPx = frontCount;
+    if (frontCount > 0) {
+        out.avgR = (float)sumR / frontCount;
+        out.avgG = (float)sumG / frontCount;
+        out.avgB = (float)sumB / frontCount;
     }
 
-    void process(const k4a_float3_t& hand, const k4a_float3_t& shoulder) {
-        float forward = shoulder.xyz.z - hand.xyz.z;
-        float heightDiff = fabsf(hand.xyz.y - shoulder.xyz.y);
-        bool armExtended = (forward > STOP_FORWARD_MM) && (heightDiff < STOP_HEIGHT_TOL);
+    // pixels -> cm2 (1 pixel = 1/pxPerMm^2 mm2 ; 100 mm2 = 1 cm2)
+    float pxToCm2 = 1.0f / (pxPerMm * pxPerMm) / 100.0f;
+    out.red  = redCount  * pxToCm2;
+    out.blue = blueCount * pxToCm2;
+    return out;
+}
 
-        if (stopActive) {
-            // Já em pausa: só verifica se o braço baixou
-            if (!armExtended) {
-                releaseFrames++;
-                if (releaseFrames >= STOP_RELEASE_FRAMES) {
-                    std::cout << "\n>>> [GESTURE] STOP ENDED (RESUME) <<<\n";
+// Máquina de estados simples:
+//  - a jogar  -> placa vermelha envia PAUSE
+//  - em pausa -> placa azul envia RESUME
+// Cada placa só conta no estado em que faz sentido, por isso manter a placa levantada não repete o comando.
+struct GestureTracker {
+    bool paused = false;
+    int holdFrames = 0;
+
+    void process(const SignAreas& a) {
+        if (DEBUG_SIGN && (a.red > 5.0f || a.blue > 5.0f))
+            printf("[DEBUG] vermelho = %.0f cm2   azul = %.0f cm2   %s\n",
+                   a.red, a.blue, paused ? "[PAUSADO]" : "");
+
+        float area = paused ? a.blue : a.red;
+        int needed = paused ? RESUME_HOLD_FRAMES : STOP_HOLD_FRAMES;
+
+        if (area >= SIGN_MIN_AREA_CM2) {
+            if (++holdFrames >= needed) {
+                if (paused) {
+                    std::cout << "\n>>> [GESTURE] RESUME (placa azul) <<<\n";
                     g_udp.send("RESUME");
-                    stopActive = false;
-                    releaseFrames = 0;
+                } else {
+                    std::cout << "\n>>> [GESTURE] STOP (placa vermelha) <<<\n";
+                    g_udp.send("PAUSE");
                 }
-            } else {
-                releaseFrames = 0;
-            }
-            return;
-        }
-
-        if (armExtended) {
-            holdFrames++;
-            if (holdFrames >= STOP_HOLD_FRAMES) {
-                std::cout << "\n>>> [GESTURE] STOP (PAUSE) <<<\n";
-                g_udp.send("PAUSE");
-                stopActive = true;
+                paused = !paused;
                 holdFrames = 0;
-                releaseFrames = 0;
             }
-        } else {
-            holdFrames = 0;
+        } else if (holdFrames > 0) {
+            --holdFrames;   // perdoa frames maus isolados
         }
     }
 };
 
 // ===================== CHAMA =====================
-// Detecta pixels de chama na imagem de cor (BGRA)
-// Critério: Vermelho forte, Verde médio, Azul fraco, e R > G + 40
+// Critério: Vermelho forte, Verde médio/alto, Azul fraco
 static inline bool isFlamePixel(const uint8_t* p) {
     int b = p[0], g = p[1], r = p[2];
     return r >= 250 && g >= 170 && r > g && g > b + 40;
@@ -176,9 +253,9 @@ int main() {
     }
     // Exposição fixa e baixa: só fontes muito luminosas (a chama) saturam
     k4a_device_set_color_control(device, K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE,
-                                K4A_COLOR_CONTROL_MODE_MANUAL, 2500); // µs; valores típicos: 500, 1250, 2500, 8330
+                                 K4A_COLOR_CONTROL_MODE_MANUAL, COLOR_EXPOSURE_US);
     k4a_device_set_color_control(device, K4A_COLOR_CONTROL_WHITEBALANCE,
-                                K4A_COLOR_CONTROL_MODE_MANUAL, 4500);
+                                 K4A_COLOR_CONTROL_MODE_MANUAL, 4500);
 
     k4a_calibration_t calibration;
     k4a_device_get_calibration(device, config.depth_mode, config.color_resolution, &calibration);
@@ -194,9 +271,14 @@ int main() {
         return -1;
     }
 
+    // Transformação depth -> câmara de cor (para saber a profundidade de cada pixel de cor)
+    k4a_transformation_t transformation = k4a_transformation_create(&calibration);
+    k4a_image_t depthInColor = NULL;
+    k4a_image_create(K4A_IMAGE_FORMAT_DEPTH16, 1280, 720, 1280 * (int)sizeof(uint16_t), &depthInColor);
+
     GestureTracker gesture_engine;
     FlameTracker flame_engine;
-    std::cout << "Tracker running. Estica o braco para PAUSE; acende uma vela/isqueiro para ligar as velas.\n";
+    std::cout << "Tracker running. Placa vermelha = PAUSE, placa azul = RESUME; acende uma vela/isqueiro para ligar as velas.\n";
 
     while (true) {
         k4a_capture_t capture = NULL;
@@ -204,14 +286,20 @@ int main() {
 
         if (get_capture_result == K4A_WAIT_RESULT_SUCCEEDED) {
 
-            // --- Chama: usa a imagem de cor deste capture (se existir) ---
             k4a_image_t color = k4a_capture_get_color_image(capture);
-            if (color) {
-                flame_engine.process(countFlamePixels(color));
-                k4a_image_release(color);
-            }
+            k4a_image_t depth = k4a_capture_get_depth_image(capture);
 
-            // --- Corpo: STOP ---
+            // --- Chama ---
+            if (color)
+                flame_engine.process(countFlamePixels(color));
+
+            // --- Profundidade alinhada com a cor ---
+            bool depthOk = false;
+            if (depth)
+                depthOk = (K4A_RESULT_SUCCEEDED ==
+                           k4a_transformation_depth_image_to_color_camera(transformation, depth, depthInColor));
+
+            // --- Corpo: placas ---
             k4abt_tracker_enqueue_capture(tracker, capture, 100);
             k4a_capture_release(capture);
 
@@ -220,25 +308,43 @@ int main() {
 
             if (pop_frame_result == K4A_WAIT_RESULT_SUCCEEDED) {
                 uint32_t num_bodies = k4abt_frame_get_num_bodies(body_frame);
+                SignAreas areas;   // 0 por defeito: sem corpo/dados, os contadores só descem (nunca envia nada)
+                int dbgConf = -1;
+                float dbgZ = 0.0f;
 
                 if (num_bodies > 0) {
                     k4abt_body_t body;
                     k4abt_frame_get_body_skeleton(body_frame, 0, &body.skeleton);
 
-                    k4a_float3_t hand = body.skeleton.joints[K4ABT_JOINT_HAND_RIGHT].position;
                     k4a_float3_t shoulder = body.skeleton.joints[K4ABT_JOINT_SHOULDER_RIGHT].position;
-                    k4abt_joint_confidence_level_t hand_conf = body.skeleton.joints[K4ABT_JOINT_HAND_RIGHT].confidence_level;
-                    k4abt_joint_confidence_level_t shoulder_conf = body.skeleton.joints[K4ABT_JOINT_SHOULDER_RIGHT].confidence_level;
-                    bool confidence_ok = hand_conf >= K4ABT_JOINT_CONFIDENCE_LOW && shoulder_conf >= K4ABT_JOINT_CONFIDENCE_LOW;
+                    dbgZ = shoulder.xyz.z;
+                    dbgConf = (int)body.skeleton.joints[K4ABT_JOINT_SHOULDER_RIGHT].confidence_level;
+                    bool confidence_ok =
+                        body.skeleton.joints[K4ABT_JOINT_SHOULDER_RIGHT].confidence_level >= K4ABT_JOINT_CONFIDENCE_LOW;
 
-                    if (confidence_ok) gesture_engine.process(hand, shoulder);
-                    else               gesture_engine.onLost();
+                    if (confidence_ok && color && depthOk)
+                        areas = signAreasInFrontOfShoulder(color, depthInColor, calibration, shoulder);
                 }
+                if (DEBUG_STATUS) {
+                    static int dbgFrame = 0;
+                    if (++dbgFrame % 10 == 0)
+                        printf("[STATUS] corpos=%u ombroConf=%d ombroZ=%.0f cor=%d depth=%d | pxPerMm=%.2f frente=%d px "
+                               "corMedia(RGB)=(%.0f,%.0f,%.0f) | vermelho=%.0f cm2 azul=%.0f cm2 %s\n",
+                               num_bodies, dbgConf, dbgZ, color ? 1 : 0, depthOk ? 1 : 0,
+                               areas.pxPerMm, areas.frontPx, areas.avgR, areas.avgG, areas.avgB,
+                               areas.red, areas.blue, gesture_engine.paused ? "[PAUSADO]" : "");
+                }
+                gesture_engine.process(areas);
                 k4abt_frame_release(body_frame);
             }
+
+            if (color) k4a_image_release(color);
+            if (depth) k4a_image_release(depth);
         }
     }
 
+    k4a_image_release(depthInColor);
+    k4a_transformation_destroy(transformation);
     k4abt_tracker_destroy(tracker);
     k4a_device_stop_cameras(device);
     k4a_device_close(device);
