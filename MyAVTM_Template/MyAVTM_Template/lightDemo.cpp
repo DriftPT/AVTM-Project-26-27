@@ -39,6 +39,13 @@
 #include "Environment.h"
 #include "meshFromAssimp.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+#define MINIAUDIO_IMPLEMENTATION
+#include "miniaudio.h"
+
 using namespace std;
 
 #define CAPTION "AVTM 2026 Welcome Demo"
@@ -46,6 +53,9 @@ int WindowHandle = 0;
 int WinX = 640, WinY = 480;
 
 unsigned int FrameCount = 0;
+
+// Arduino
+HANDLE arduinoSerial = INVALID_HANDLE_VALUE;
 
 // File with the font
 const string fontPathFile = "fonts/arial.ttf";
@@ -203,6 +213,33 @@ bool keyA = false;
 bool keyD = false;
 
 // ------------------------------------------------------------
+// Arduino tilt controls
+
+float arduinoThrottle = 0.0f;  // -1 = trás, +1 = frente
+float arduinoSteering = 0.0f;  // -1 = esquerda, +1 = direita
+
+// Configuração da inclinação (graus)
+const float TILT_DEADZONE = 5.0f;
+const float TILT_MAX_ANGLE = 30.0f;
+
+// ------------------------------------------------------------
+// Arduino light sensor
+int arduinoLight = 0;
+const int LIGHT_THRESHOLD = 500; // Threshold for detecting darkness
+
+// ------------------------------------------------------------
+// Arduino ignition switch
+bool arduinoIgnition = false;
+bool previousArduinoIgnition = false;
+
+ma_engine audioEngine;
+bool audioInitialized = false;
+
+ma_sound carDrivingSound;
+bool drivingSoundInitialized = false;
+bool drivingSoundPlaying = false;
+
+// ------------------------------------------------------------
 // Car movement
 
 float carVelocity = 0.0f;
@@ -295,6 +332,121 @@ CarMaterial boundingBoxMaterial = {
 	{1.0f, 0.0f, 0.0f, 1.0f},
 	{1.0f, 0.0f, 0.0f, 1.0f},
 	10.0f};
+
+
+
+float mapTilt(float angle)
+{
+	float magnitude = fabsf(angle);
+
+	// Ignorar pequenas inclinações
+	if (magnitude <= TILT_DEADZONE)
+		return 0.0f;
+
+	// Converter o intervalo 5° a 30° para 0 a 1
+	float value =
+		(magnitude - TILT_DEADZONE) /
+		(TILT_MAX_ANGLE - TILT_DEADZONE);
+
+	// Limitar a 100%
+	if (value > 1.0f)
+		value = 1.0f;
+
+	// Recuperar o sinal original
+	return (angle < 0.0f) ? -value : value;
+}
+
+
+bool initArduinoSerial(const char* portName)
+{
+		arduinoSerial = CreateFileA(portName,GENERIC_READ,0,NULL,OPEN_EXISTING,0,NULL);
+
+    if (arduinoSerial == INVALID_HANDLE_VALUE)
+    {
+        printf("Could not open Arduino serial port\n");
+        return false;
+    }
+
+    DCB serialParams = {0};
+    serialParams.DCBlength = sizeof(serialParams);
+
+    if (!GetCommState(arduinoSerial, &serialParams))
+        return false;
+
+    serialParams.BaudRate = CBR_9600;
+    serialParams.ByteSize = 8;
+    serialParams.StopBits = ONESTOPBIT;
+    serialParams.Parity = NOPARITY;
+
+    if (!SetCommState(arduinoSerial, &serialParams))
+        return false;
+
+    COMMTIMEOUTS timeouts = {0};
+    timeouts.ReadIntervalTimeout = 1;
+    timeouts.ReadTotalTimeoutConstant = 1;
+    timeouts.ReadTotalTimeoutMultiplier = 0;
+
+    SetCommTimeouts(arduinoSerial, &timeouts);
+
+    printf("Arduino connected on %s\n", portName);
+
+    return true;
+}
+
+void updateArduinoControls()
+{
+	if (arduinoSerial == INVALID_HANDLE_VALUE)
+		return;
+
+	static std::string serialBuffer;
+
+	char buffer[64];
+	DWORD bytesRead = 0;
+
+	if (ReadFile( arduinoSerial, buffer, sizeof(buffer) - 1, &bytesRead, NULL)) {
+		if (bytesRead > 0) {
+			buffer[bytesRead] = '\0';
+			serialBuffer += buffer;
+
+			size_t newlinePos;
+
+			while ((newlinePos = serialBuffer.find('\n')) != std::string::npos) {
+				std::string line =
+					serialBuffer.substr(0, newlinePos);
+
+				serialBuffer.erase(0, newlinePos + 1);
+
+				float pitch, roll;
+				int light, ignition;
+
+				// Receive pitch, roll and light sensor values
+				if (sscanf(line.c_str(), "%f,%f,%d,%d", &pitch, &roll, &light, &ignition) == 4) {
+
+					// Forward / backward acceleration
+					arduinoThrottle = mapTilt(pitch);
+
+					// Left / right steering
+					arduinoSteering = -mapTilt(roll);
+
+					// Light sensor reading
+					arduinoLight = light;
+
+					// Ignition reading
+					arduinoIgnition = (ignition == 1);
+
+					printf(
+						"Pitch: %.1f Roll: %.1f | Throttle: %.2f Steering: %.2f | Light: %d\n",
+						pitch,
+						roll,
+						arduinoThrottle,
+						arduinoSteering,
+						arduinoLight
+					);
+				}
+			}
+		}
+	}
+}
 
 /// ::::::::::::::::::::::::::::::::::::::::::::::::CALLBACK FUNCIONS:::::::::::::::::::::::::::::::::::::::::::::::::://///
 
@@ -645,21 +797,46 @@ void handleCollisions(float oldX, float oldZ)
 void updateCar(float dt)
 {
 	// ------------------------------------------------------------
+	// INPUT: KEYBOARD + ARDUINO
+
+	float throttleInput = 0.0f;
+	float steeringInput = 0.0f;
+
+	if (arduinoSerial == INVALID_HANDLE_VALUE || arduinoIgnition)
+	{
+		throttleInput = arduinoThrottle;
+		steeringInput = arduinoSteering;
+
+		// Keyboard overrides Arduino for acceleration
+		if (keyW && !keyS)
+			throttleInput = 1.0f;
+		else if (keyS && !keyW)
+			throttleInput = -1.0f;
+
+		// Keyboard overrides Arduino for steering
+		if (keyA && !keyD)
+			steeringInput = -1.0f;
+		else if (keyD && !keyA)
+			steeringInput = 1.0f;
+	}
+
+	// ------------------------------------------------------------
 	// ACCELERATION
 
-	if (keyW && !keyS)
+	if (throttleInput > 0.0f)
 	{
 		// Accelerate forward
-		carAcceleration = ACCELERATION;
+		carAcceleration = ACCELERATION * throttleInput;
 	}
-	else if (keyS && !keyW)
+	else if (throttleInput < 0.0f)
 	{
 		// Accelerate backwards
-		carAcceleration = -ACCELERATION;
+		carAcceleration = ACCELERATION * throttleInput;
 	}
 	else
 	{
-		// Neither W nor S is pressed: gradually reduce the velocity.
+		// Neither W nor S nor Arduino acceleration:
+		// gradually reduce the velocity.
 
 		if (carVelocity > 0.0f)
 		{
@@ -682,8 +859,9 @@ void updateCar(float dt)
 
 	carVelocity += carAcceleration * dt;
 
-	// When no acceleration key is pressed, stop at exactly zero instead of crossing it.
-	if (!keyW && !keyS)
+	// When no acceleration input is active,
+	// stop at exactly zero instead of crossing it.
+	if (throttleInput == 0.0f)
 	{
 		if ((oldVelocity > 0.0f && carVelocity < 0.0f) ||
 			(oldVelocity < 0.0f && carVelocity > 0.0f))
@@ -714,11 +892,8 @@ void updateCar(float dt)
 		if (carVelocity < 0.0f)
 			directionSign = -1.0f;
 
-		if (keyA)
-			carAngle += TURN_SPEED * directionSign * dt;
-
-		if (keyD)
-			carAngle -= TURN_SPEED * directionSign * dt;
+		// Steering proportional to keyboard or Arduino input
+		carAngle -= TURN_SPEED * steeringInput * directionSign * dt;
 	}
 
 	// ------------------------------------------------------------
@@ -732,6 +907,7 @@ void updateCar(float dt)
 
 	// ------------------------------------------------------------
 	// UPDATE POSITION
+
 	float oldX = carX;
 	float oldZ = carZ;
 
@@ -1650,6 +1826,110 @@ void renderSceneWithReflections()
 	drawObjectsAboveRoad(false);
 }
 
+
+// ------------------------------------------------------------
+// AUDIO FUNCTIONS
+
+void initAudio()
+{
+	if (ma_engine_init(NULL, &audioEngine) != MA_SUCCESS)
+	{
+		printf("Failed to initialize audio\n");
+		return;
+	}
+
+	audioInitialized = true;
+	printf("Audio initialized successfully\n");
+
+	if (ma_sound_init_from_file(
+		&audioEngine,
+		"assets/sounds/car_driving.wav",
+		0, NULL, NULL,
+		&carDrivingSound
+	) == MA_SUCCESS)
+	{
+		ma_sound_set_looping(&carDrivingSound, MA_TRUE);
+		drivingSoundInitialized = true;
+		printf("Driving sound loaded\n");
+	}
+	else
+	{
+		printf("Failed to load driving sound\n");
+	}
+}
+
+
+void playCarStartSound()
+{
+	if (audioInitialized)
+	{
+		ma_engine_play_sound(
+			&audioEngine,
+			"assets/sounds/car_start_eng.wav",
+			NULL
+		);
+	}
+}
+
+void playCarStopSound()
+{
+	if (audioInitialized)
+	{
+		ma_engine_play_sound(
+			&audioEngine,
+			"assets/sounds/car_stop.wav",
+			NULL
+		);
+	}
+}
+
+
+void updateCarAudio()
+{
+	if (!drivingSoundInitialized)
+		return;
+
+	bool engineOn =
+		(arduinoSerial == INVALID_HANDLE_VALUE || arduinoIgnition);
+
+	bool isDriving =
+		engineOn &&
+		gameStarted &&
+		!paused &&
+		!gameOver &&
+		fabsf(carVelocity) > 0.5f;
+
+	if (isDriving && !drivingSoundPlaying)
+	{
+		ma_sound_start(&carDrivingSound);
+		drivingSoundPlaying = true;
+	}
+	else if (!isDriving && drivingSoundPlaying)
+	{
+		ma_sound_stop(&carDrivingSound);
+		ma_sound_seek_to_pcm_frame(&carDrivingSound, 0);
+		drivingSoundPlaying = false;
+	}
+}
+
+
+void cleanupAudio()
+{
+	if (drivingSoundInitialized)
+	{
+		ma_sound_uninit(&carDrivingSound);
+		drivingSoundInitialized = false;
+	}
+
+	if (audioInitialized)
+	{
+		ma_engine_uninit(&audioEngine);
+		audioInitialized = false;
+	}
+}
+
+
+
 void handleGestures(); // defined in Events from the Keyboard
 
 // Render the simulation scene
@@ -1673,6 +1953,63 @@ void renderSim(void)
 	if (dt > 0.05f)
 		dt = 0.05f;
 
+	// Read physical controller
+	updateArduinoControls();
+
+	// Control lighting based on the Arduino light sensor
+	if (arduinoSerial != INVALID_HANDLE_VALUE)
+	{
+		if (arduinoLight < LIGHT_THRESHOLD)
+		{
+			// Darkness: turn off global illumination and turn on headlights
+			globalIllumination = false;
+			carHeadlights = true;
+		}
+		else
+		{
+			// Daylight: turn on global illumination and turn off headlights
+			globalIllumination = true;
+			carHeadlights = false;
+		}
+	}
+
+	// Detect ignition transition from OFF to ON
+	if (arduinoSerial != INVALID_HANDLE_VALUE)
+	{
+		if (arduinoIgnition && !previousArduinoIgnition)
+		{
+			playCarStartSound();
+
+			if (!gameStarted)
+			{
+				// Start the game
+				gameStarted = true;
+			}
+			else if (gameOver)
+			{
+				// Restart the game
+				lives = MAX_LIVES;
+				points = 0;
+				lastScoreChange = 0;
+				scoreChangeTimer = 0.0f;
+
+				env.gameOver();
+				gameOver = false;
+
+				resetCarToStart();
+				env.resetPointOrbs();
+			}
+		}
+
+		// ON -> OFF
+		if (!arduinoIgnition && previousArduinoIgnition)
+		{
+			playCarStopSound();
+		}
+
+		previousArduinoIgnition = arduinoIgnition;
+	}
+
 	// update the environment and car
 	if (!paused && !gameOver && gameStarted)
 	{
@@ -1683,6 +2020,9 @@ void renderSim(void)
 			scoreChangeTimer -= dt;
 		}
 	}
+
+	// Update audio
+	updateCarAudio();
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
@@ -2244,6 +2584,8 @@ int main(int argc, char **argv)
 	glutInitWindowSize(WinX, WinY);
 	WindowHandle = glutCreateWindow(CAPTION);
 
+	initArduinoSerial("\\\\.\\COM4");
+
 	//  Callback Registration
 	glutDisplayFunc(renderSim);
 	glutReshapeFunc(changeSize);
@@ -2288,6 +2630,8 @@ int main(int argc, char **argv)
 	gestureInput::init(); // initialize gesture input system
 	buildScene();
 
+	initAudio();
+
 	if (!renderer.setRenderMeshesShaderProg("shaders/mesh.vert", "shaders/mesh.frag") ||
 		!renderer.setRenderTextShaderProg("shaders/ttf.vert", "shaders/ttf.frag"))
 		return (1);
@@ -2295,6 +2639,8 @@ int main(int argc, char **argv)
 	//  GLUT main loop
 	glutMainLoop();
 	gestureInput::shutdown(); // shutdown gesture input system
+
+	cleanupAudio();
 
 	return (0);
 }
