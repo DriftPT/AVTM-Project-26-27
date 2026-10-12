@@ -281,6 +281,33 @@ float CAR_MIN_Z = -3.15f * CAR_SCALE;
 float CAR_MAX_Z = 2.85f * CAR_SCALE;
 
 // ------------------------------------------------------------
+// BOOST + SMOKE
+// ------------------------------------------------------------
+
+const float BOOST_DURATION  = 0.35f;  // segundos de aceleração extra
+const float BOOST_COOLDOWN  = 1.5f;   // tempo até poder voltar a usar
+const float BOOST_ACCEL     = 90.0f;  // aceleração extra durante o boost
+const float BOOST_MAX_SPEED = 45.0f;  // velocidade máxima durante o boost
+const float BOOST_DECAY     = 40.0f;  // quão depressa volta à velocidade normal
+
+float boostTimer = 0.0f;
+float boostCooldown = 0.0f;
+struct SmokeParticle
+{
+	float x, y, z;
+	float vx, vy, vz;
+	float life, maxLife;
+	float startRadius;
+};
+std::vector<SmokeParticle> smokeParticles;
+
+// função auxiliar para gerar um número aleatório entre a e b
+static float frand(float a, float b)
+{
+	return a + (b - a) * ((float)rand() / (float)RAND_MAX);
+}
+
+// ------------------------------------------------------------
 // MATERIALS
 
 struct CarMaterial
@@ -794,6 +821,118 @@ void handleCollisions(float oldX, float oldZ)
 	}
 }
 
+void startBoost()
+{
+	if (!gameStarted || paused || gameOver)
+		return;
+	if (boostTimer > 0.0f || boostCooldown > 0.0f)
+		return;
+	// com o Arduino ligado, só funciona com a ignição ligada
+	if (arduinoSerial != INVALID_HANDLE_VALUE && !arduinoIgnition)
+		return;
+
+	boostTimer = BOOST_DURATION;
+	boostCooldown = BOOST_COOLDOWN;
+}
+
+void spawnSmokeAtExhausts()
+{
+	float angleRad = carAngle * 3.14159265f / 180.0f;
+	float s = sin(angleRad);
+	float c = cos(angleRad);
+
+	// posições locais dos escapes (as mesmas do drawCar)
+	const float exhaustX[2] = { -0.9f, 0.9f };
+
+	for (int i = 0; i < 2; i++)
+	{
+		float lx = exhaustX[i] * CAR_SCALE;
+		float ly = 0.5f * CAR_SCALE;
+		float lz = -3.0f * CAR_SCALE;
+
+		SmokeParticle p;
+		p.x = carX + (lx * c + lz * s);
+		p.y = carBaseY + ly;
+		p.z = carZ + (-lx * s + lz * c);
+
+		// vai para trás do carro, com algum desvio lateral e a subir
+		float back = frand(2.0f, 5.0f);
+		p.vx = -carDirection[0] * back + frand(-0.8f, 0.8f);
+		p.vy = frand(0.8f, 2.0f);
+		p.vz = -carDirection[2] * back + frand(-0.8f, 0.8f);
+
+		p.maxLife = frand(0.6f, 1.1f);
+		p.life = p.maxLife;
+		p.startRadius = frand(0.15f, 0.3f);
+		smokeParticles.push_back(p);
+	}
+}
+
+void updateBoostAndSmoke(float dt)
+{
+	if (boostCooldown > 0.0f)
+		boostCooldown = fmaxf(0.0f, boostCooldown - dt);
+
+	if (boostTimer > 0.0f)
+	{
+		boostTimer -= dt;
+		// 3 partículas por escape por frame enquanto dura o boost
+		for (int k = 0; k < 3; k++)
+			spawnSmokeAtExhausts();
+	}
+
+	for (size_t i = 0; i < smokeParticles.size();)
+	{
+		SmokeParticle &p = smokeParticles[i];
+		p.life -= dt;
+		if (p.life <= 0.0f)
+		{
+			smokeParticles[i] = smokeParticles.back();
+			smokeParticles.pop_back();
+			continue;
+		}
+		p.x += p.vx * dt;
+		p.y += p.vy * dt;
+		p.z += p.vz * dt;
+		p.vx *= (1.0f - 1.5f * dt); // o fumo vai abrandando
+		p.vz *= (1.0f - 1.5f * dt);
+		++i;
+	}
+}
+
+void drawSmoke()
+{
+	if (smokeParticles.empty())
+		return;
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glDepthMask(GL_FALSE); // translúcido: não escreve no depth buffer
+
+	for (const auto &p : smokeParticles)
+	{
+		float t = 1.0f - p.life / p.maxLife; // 0 = acabou de nascer, 1 = a desparecer
+		float radius = p.startRadius * (1.0f + 3.0f * t); // cresce
+		float alpha = 0.55f * (1.0f - t);                 // desvanece
+
+		CarMaterial smoke = {
+			{0.30f, 0.55f, 1.00f, 1.0f},
+			{0.20f, 0.45f, 1.00f, alpha},
+			{0.0f, 0.0f, 0.0f, 1.0f},
+			1.0f};
+		setMeshMaterial(MESH_SPHERE, smoke); // fumo é mais transpaente a medida que se afasta do carro (tempo de vida da partícula)
+
+		mu.pushMatrix(gmu::MODEL);
+		mu.translate(gmu::MODEL, p.x, p.y, p.z);
+		mu.scale(gmu::MODEL, radius, radius, radius);
+		drawMesh(MESH_SPHERE);
+		mu.popMatrix(gmu::MODEL);
+	}
+
+	glDepthMask(GL_TRUE);
+	glDisable(GL_BLEND);
+}
+
 void updateCar(float dt)
 {
 	// ------------------------------------------------------------
@@ -872,10 +1011,22 @@ void updateCar(float dt)
 	}
 
 	// ------------------------------------------------------------
-	// LIMIT MAXIMUM SPEED
+	// BOOST + LIMIT MAXIMUM SPEED
 
-	if (carVelocity > MAX_SPEED)
-		carVelocity = MAX_SPEED;
+	if (boostTimer > 0.0f)
+	{
+		// dash: aceleração extra para a frente, a velocidade sobe gradualmente
+		carVelocity += BOOST_ACCEL * dt;
+		if (carVelocity > BOOST_MAX_SPEED)
+			carVelocity = BOOST_MAX_SPEED;
+	}
+	else if (carVelocity > MAX_SPEED)
+	{
+		// acabou o boost: volta suavemente à velocidade normal
+		carVelocity -= BOOST_DECAY * dt;
+		if (carVelocity < MAX_SPEED)
+			carVelocity = MAX_SPEED;
+	}
 
 	if (carVelocity < -MAX_SPEED)
 		carVelocity = -MAX_SPEED;
@@ -1729,6 +1880,7 @@ void drawObjectsAboveRoad(bool mirrored)
 	drawCarModel();
 	if (!mirrored)
 		drawCarAABB();
+	drawSmoke();
 	env.renderTranslucent(renderer, mu); // orbs por último
 }
 
@@ -2015,10 +2167,9 @@ void renderSim(void)
 	{
 		env.update(dt);
 		updateCar(dt);
+		updateBoostAndSmoke(dt); 
 		if (scoreChangeTimer > 0.0f)
-		{
 			scoreChangeTimer -= dt;
-		}
 	}
 
 	// Update audio
@@ -2194,6 +2345,9 @@ void processKeys(unsigned char key, int xx, int yy)
 			points = 0;
 			lastScoreChange = 0;
 			scoreChangeTimer = 0.0f;
+			boostTimer = 0;
+			boostCooldown = 0;
+			smokeParticles.clear();
 			env.gameOver();
 			gameOver = false;
 			resetCarToStart();
@@ -2264,6 +2418,9 @@ void processKeys(unsigned char key, int xx, int yy)
 		updateCarAABB();
 
 		printf("OBJ Visibility [%d]\n", objVisible);
+		break;
+	case ' ':
+		startBoost();
 		break;
 	}
 }
