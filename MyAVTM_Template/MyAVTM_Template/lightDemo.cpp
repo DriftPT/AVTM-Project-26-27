@@ -228,9 +228,11 @@ int arduinoLight = 0;
 const int LIGHT_THRESHOLD = 500; // Threshold for detecting darkness
 
 // ------------------------------------------------------------
-// Arduino ignition switch
+// Arduino switch
 bool arduinoIgnition = false;
 bool previousArduinoIgnition = false;
+
+bool previousArduinoBoostButton = false;
 
 ma_engine audioEngine;
 bool audioInitialized = false;
@@ -420,6 +422,8 @@ bool initArduinoSerial(const char* portName)
     return true;
 }
 
+void startBoost();
+
 void updateArduinoControls()
 {
 	if (arduinoSerial == INVALID_HANDLE_VALUE)
@@ -444,10 +448,10 @@ void updateArduinoControls()
 				serialBuffer.erase(0, newlinePos + 1);
 
 				float pitch, roll;
-				int light, ignition;
+				int light, ignition, boostButton;
 
 				// Receive pitch, roll and light sensor values
-				if (sscanf(line.c_str(), "%f,%f,%d,%d", &pitch, &roll, &light, &ignition) == 4) {
+				if (sscanf(line.c_str(), "%f,%f,%d,%d,%d", &pitch, &roll, &light, &ignition, &boostButton) == 5) {
 
 					// Forward / backward acceleration
 					arduinoThrottle = mapTilt(pitch);
@@ -461,13 +465,23 @@ void updateArduinoControls()
 					// Ignition reading
 					arduinoIgnition = (ignition == 1);
 
+					// Boost button reading
+					bool boostPressed = (boostButton == 1);
+
+					if (boostPressed && !previousArduinoBoostButton) {
+						startBoost();
+					}
+
+					previousArduinoBoostButton = boostPressed;
+
 					printf(
-						"Pitch: %.1f Roll: %.1f | Throttle: %.2f Steering: %.2f | Light: %d\n",
+						"Pitch: %.1f Roll: %.1f | Throttle: %.2f Steering: %.2f | Light: %d | Boost: %d\n",
 						pitch,
 						roll,
 						arduinoThrottle,
 						arduinoSteering,
-						arduinoLight
+						arduinoLight,
+						boostButton
 					);
 				}
 			}
@@ -1677,124 +1691,6 @@ void updateCarHeadlights(float headlightsWorld[2][4], float coneDirWorld[4])
 //
 // Render stufff
 //
-void renderRearMirror()
-{
-	if (!showRearMirror || !gameStarted || !trackingCamera)
-		return;
-
-	int mirrorW = (int)(WinX * MIRROR_WIDTH_RATIO); // 28% da largura da janela
-	int mirrorH = (int)(WinY * MIRROR_HEIGHT_RATIO);
-	int mirrorX = WinX - mirrorW - MIRROR_MARGIN;
-	int mirrorY = WinY - mirrorH - MIRROR_MARGIN;
-
-	const int FRAME_BORDER = 6;
-
-	int m_viewport[4];
-	glGetIntegerv(GL_VIEWPORT, m_viewport);
-
-	// --------------------------------------------------------
-	// Screen-space setup (moldura + máscara do stencil)
-
-	mu.pushMatrix(gmu::PROJECTION);
-	mu.loadIdentity(gmu::PROJECTION);
-	mu.ortho(m_viewport[0], m_viewport[0] + m_viewport[2] - 1, m_viewport[1], m_viewport[1] + m_viewport[3] - 1, -1, 1);
-
-	mu.pushMatrix(gmu::VIEW);
-	mu.loadIdentity(gmu::VIEW);
-	mu.pushMatrix(gmu::MODEL);
-
-	// Moldura: retângulo sólido, um pouco maior, por trás da máscara 
-	mu.loadIdentity(gmu::MODEL);
-	mu.translate(gmu::MODEL, mirrorX + mirrorW * 0.5f, mirrorY + mirrorH * 0.5f, 0.0f); // Move o centro do cubo para o centro do espelho
-	mu.scale(gmu::MODEL, (float)(mirrorW + FRAME_BORDER * 1.5), (float)(mirrorH + FRAME_BORDER * 1.5), 1.0f);
-	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
-	setMeshMaterial(MESH_CUBE, darkMaterial);
-	drawMesh(MESH_CUBE);
-
-	glEnable(GL_STENCIL_TEST);
-	glClear(GL_STENCIL_BUFFER_BIT);
-
-	// Máscara do stencil: retângulo do tamanho real do espelho
-	mu.loadIdentity(gmu::MODEL);
-	mu.translate(gmu::MODEL, mirrorX + mirrorW * 0.5f, mirrorY + mirrorH * 0.5f, 0.0f);
-	mu.scale(gmu::MODEL, (float)mirrorW, (float)mirrorH, 1.0f);
-	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
-
-	// Marca o retângulo do espelho no stencil buffer (valor 1) sem desenhar cor nem profundidade
-	glStencilFunc(GL_NEVER, 0x1, 0x1);
-	glStencilOp(GL_REPLACE, GL_KEEP, GL_KEEP);
-	drawMesh(MESH_CUBE);
-
-	mu.popMatrix(gmu::MODEL);
-	mu.popMatrix(gmu::VIEW);
-	mu.popMatrix(gmu::PROJECTION);
-
-	// --------------------------------------------------------
-	// Limpar profundidade e cor só na zona do espelho
-	glEnable(GL_SCISSOR_TEST);
-	glScissor(mirrorX, mirrorY, mirrorW, mirrorH);
-	glDepthMask(GL_TRUE);
-	glClearColor(fogColor[0], fogColor[1], fogColor[2], 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glDisable(GL_SCISSOR_TEST);
-
-	// --------------------------------------------------------
-	glStencilFunc(GL_EQUAL, 0x1, 0x1);      // agora só passa onde stencil == 1 (dentro do espelho)
-	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-
-	glViewport(mirrorX, mirrorY, mirrorW, mirrorH); // a cena vai ser desenhada neste retângulo
-	// --------------------------------------------------------
-	// Câmara traseira
-	mu.pushMatrix(gmu::PROJECTION);
-	mu.loadIdentity(gmu::PROJECTION);
-	float mirrorRatio = (float)mirrorW / (float)mirrorH;
-	mu.perspective(MIRROR_FOV, mirrorRatio, 0.1f, 1000.0f);
-
-	mu.pushMatrix(gmu::VIEW);
-	mu.loadIdentity(gmu::VIEW);
-
-	float mirrorEyeY = carBaseY + 1.6f * CAR_SCALE;
-	float mirrorTargetX = carX - carDirection[0]; // ponto para onde olha, 1 unidade atrás do carro
-	float mirrorTargetZ = carZ - carDirection[2];
-
-	mu.lookAt(carX, mirrorEyeY, carZ, mirrorTargetX, mirrorEyeY, mirrorTargetZ, 0, 1, 0);
-
-	mu.loadIdentity(gmu::MODEL);
-
-	// --------------------------------------------------------
-	// Luzes em eye coords para esta VIEW
-	renderer.activateRenderMeshesShaderProg();
-
-	float mGlobalLightEye[4];
-	mu.multMatrixPoint(gmu::VIEW, globalLightPos, mGlobalLightEye);
-	renderer.setGlobalLight(globalIllumination, mGlobalLightEye);
-
-	float mHeadlightsWorld[2][4], mConeDirWorld[4], mHeadlightsEye[2][4], mConeDirEye[4];
-	updateCarHeadlights(mHeadlightsWorld, mConeDirWorld);
-	for (int i = 0; i < 2; i++)
-		mu.multMatrixPoint(gmu::VIEW, mHeadlightsWorld[i], mHeadlightsEye[i]);
-	mu.multMatrixPoint(gmu::VIEW, mConeDirWorld, mConeDirEye);
-	renderer.setSpotLights(carHeadlights, mHeadlightsEye, mConeDirEye, spotCosCutOff);
-
-	float mCandlesEye[6][4];
-	for (int i = 0; i < 6; i++)
-		mu.multMatrixPoint(gmu::VIEW, candles[i], mCandlesEye[i]);
-	renderer.setCandlesLights(candlesIllumination, mCandlesEye);
-
-	renderer.setFog(fogEnabled, fogColor);
-
-	env.render(renderer, mu);
-	env.renderTranslucent(renderer, mu);
-
-	// --------------------------------------------------------
-	// Repor o estado anterior
-	mu.popMatrix(gmu::VIEW);
-	mu.popMatrix(gmu::PROJECTION);
-
-	glViewport(m_viewport[0], m_viewport[1], m_viewport[2], m_viewport[3]);
-	glStencilFunc(GL_ALWAYS, 0x0, 0x1);
-	glDisable(GL_STENCIL_TEST);
-}
 
 // Envia as luzes em eye space. Se mirrored, espelha-as em relação ao plano da estrada
 void setSceneLights(bool mirrored)
@@ -1977,6 +1873,139 @@ void renderSceneWithReflections()
 	// Desenha os objetos acima da estrada/mesa
 	drawObjectsAboveRoad(false);
 }
+
+
+void renderRearMirror()
+{
+	if (!showRearMirror || !gameStarted || !trackingCamera)
+		return;
+
+	int mirrorW = (int)(WinX * MIRROR_WIDTH_RATIO); // 28% da largura da janela
+	int mirrorH = (int)(WinY * MIRROR_HEIGHT_RATIO);
+	int mirrorX = WinX - mirrorW - MIRROR_MARGIN;
+	int mirrorY = WinY - mirrorH - MIRROR_MARGIN;
+
+	const int FRAME_BORDER = 6;
+
+	int m_viewport[4];
+	glGetIntegerv(GL_VIEWPORT, m_viewport);
+
+	// --------------------------------------------------------
+	// Screen-space setup (moldura + máscara do stencil)
+
+	mu.pushMatrix(gmu::PROJECTION);
+	mu.loadIdentity(gmu::PROJECTION);
+	mu.ortho(m_viewport[0], m_viewport[0] + m_viewport[2] - 1, m_viewport[1], m_viewport[1] + m_viewport[3] - 1, -1, 1);
+
+	mu.pushMatrix(gmu::VIEW);
+	mu.loadIdentity(gmu::VIEW);
+	mu.pushMatrix(gmu::MODEL);
+
+	// Moldura: retângulo sólido, um pouco maior, por trás da máscara 
+	mu.loadIdentity(gmu::MODEL);
+	mu.translate(gmu::MODEL, mirrorX + mirrorW * 0.5f, mirrorY + mirrorH * 0.5f, 0.0f); // Move o centro do cubo para o centro do espelho
+	mu.scale(gmu::MODEL, (float)(mirrorW + FRAME_BORDER * 1.5), (float)(mirrorH + FRAME_BORDER * 1.5), 1.0f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+	setMeshMaterial(MESH_CUBE, darkMaterial);
+	drawMesh(MESH_CUBE);
+
+	glEnable(GL_STENCIL_TEST);
+	glClear(GL_STENCIL_BUFFER_BIT);
+
+	// Máscara do stencil: retângulo do tamanho real do espelho
+	mu.loadIdentity(gmu::MODEL);
+	mu.translate(gmu::MODEL, mirrorX + mirrorW * 0.5f, mirrorY + mirrorH * 0.5f, 0.0f);
+	mu.scale(gmu::MODEL, (float)mirrorW, (float)mirrorH, 1.0f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+
+	// Marca o retângulo do espelho no stencil buffer (valor 1) sem desenhar cor nem profundidade
+	glStencilFunc(GL_NEVER, 0x1, 0x1);
+	glStencilOp(GL_REPLACE, GL_KEEP, GL_KEEP);
+	drawMesh(MESH_CUBE);
+
+	mu.popMatrix(gmu::MODEL);
+	mu.popMatrix(gmu::VIEW);
+	mu.popMatrix(gmu::PROJECTION);
+
+	// --------------------------------------------------------
+	// Limpar profundidade e cor só na zona do espelho
+	glEnable(GL_SCISSOR_TEST);
+	glScissor(mirrorX, mirrorY, mirrorW, mirrorH);
+	glDepthMask(GL_TRUE);
+	glClearColor(fogColor[0], fogColor[1], fogColor[2], 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glDisable(GL_SCISSOR_TEST);
+
+	// --------------------------------------------------------
+	glStencilFunc(GL_EQUAL, 0x1, 0x1);      // agora só passa onde stencil == 1 (dentro do espelho)
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
+	glViewport(mirrorX, mirrorY, mirrorW, mirrorH); // a cena vai ser desenhada neste retângulo
+	// --------------------------------------------------------
+	// Câmara traseira
+	mu.pushMatrix(gmu::PROJECTION);
+	mu.loadIdentity(gmu::PROJECTION);
+	float mirrorRatio = (float)mirrorW / (float)mirrorH;
+	mu.perspective(MIRROR_FOV, mirrorRatio, 0.1f, 1000.0f);
+
+	mu.pushMatrix(gmu::VIEW);
+	mu.loadIdentity(gmu::VIEW);
+
+	float mirrorEyeY = carBaseY + 1.6f * CAR_SCALE;
+
+	// Distance behind the car
+	float mirrorDistance = 3.0f;
+
+	// Camera position behind the car
+	float mirrorCamX = carX - carDirection[0] * mirrorDistance;
+	float mirrorCamZ = carZ - carDirection[2] * mirrorDistance;
+
+	// Camera target (looking backwards)
+	float mirrorTargetX = mirrorCamX - carDirection[0];
+	float mirrorTargetZ = mirrorCamZ - carDirection[2];
+
+	mu.lookAt(
+		mirrorCamX, mirrorEyeY, mirrorCamZ,
+		mirrorTargetX, mirrorEyeY, mirrorTargetZ,
+		0, 1, 0
+	);
+
+	mu.loadIdentity(gmu::MODEL);
+
+	// --------------------------------------------------------
+	// Luzes em eye coords para esta VIEW
+	renderer.activateRenderMeshesShaderProg();
+
+	float mGlobalLightEye[4];
+	mu.multMatrixPoint(gmu::VIEW, globalLightPos, mGlobalLightEye);
+	renderer.setGlobalLight(globalIllumination, mGlobalLightEye);
+
+	float mHeadlightsWorld[2][4], mConeDirWorld[4], mHeadlightsEye[2][4], mConeDirEye[4];
+	updateCarHeadlights(mHeadlightsWorld, mConeDirWorld);
+	for (int i = 0; i < 2; i++)
+		mu.multMatrixPoint(gmu::VIEW, mHeadlightsWorld[i], mHeadlightsEye[i]);
+	mu.multMatrixPoint(gmu::VIEW, mConeDirWorld, mConeDirEye);
+	renderer.setSpotLights(carHeadlights, mHeadlightsEye, mConeDirEye, spotCosCutOff);
+
+	float mCandlesEye[6][4];
+	for (int i = 0; i < 6; i++)
+		mu.multMatrixPoint(gmu::VIEW, candles[i], mCandlesEye[i]);
+	renderer.setCandlesLights(candlesIllumination, mCandlesEye);
+
+	renderer.setFog(fogEnabled, fogColor);
+
+	renderSceneWithReflections();
+
+	// --------------------------------------------------------
+	// Repor o estado anterior
+	mu.popMatrix(gmu::VIEW);
+	mu.popMatrix(gmu::PROJECTION);
+
+	glViewport(m_viewport[0], m_viewport[1], m_viewport[2], m_viewport[3]);
+	glStencilFunc(GL_ALWAYS, 0x0, 0x1);
+	glDisable(GL_STENCIL_TEST);
+}
+
 
 
 // ------------------------------------------------------------
