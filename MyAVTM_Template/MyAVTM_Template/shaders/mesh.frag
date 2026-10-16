@@ -202,13 +202,21 @@ void main() {
 	{
 		baseColor = vec3(0.5, 0.5, 0.5);
 	}
+	else if (texMode == 5) // HUD: textura sem iluminação
+	{
+		texel = texture(texmap, DataIn.tex_coord);
+		baseColor = texel.rgb;
+	}
 	else // valor de texMode inesperado - mostra magenta para ser óbvio que há um bug
 	{
 		baseColor = vec3(1.0, 0.0, 1.0);
 	}
 
-	vec3 finalColor = (texMode == 4) ? baseColor : baseColor + totalSpecular;
+	vec3 finalColor = (texMode == 4 || texMode == 5) ? baseColor : baseColor + totalSpecular;
 	colorOut = vec4(finalColor, mat.diffuse.a);
+	// HUD: usa o alfa da própria textura (para o fundo transparente do PNG funcionar)
+	if (texMode == 5)
+		colorOut.a = texel.a;
 
 	if (fogEnabled) {
 		float dist;

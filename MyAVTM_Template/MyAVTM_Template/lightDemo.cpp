@@ -145,7 +145,7 @@ float localHeadlights[2][4] = {
 float spotCosCutOff = 0.93;
 
 // Fog
-bool fogEnabled = true;
+bool fogEnabled = false;
 void togglefog() { fogEnabled = !fogEnabled; }
 float fogColor[3] = {0.5f, 0.6f, 0.7f};
 
@@ -175,6 +175,8 @@ bool objVisible = false;
 #define MESH_CYLINDER 3
 #define MESH_CONE 4
 #define MESH_TORUS 5
+#define TEX_ENGINE_OFF 9
+#define TEX_ENGINE_ON  10
 
 // ------------------------------------------------------------
 // Gameplay HUD
@@ -225,7 +227,7 @@ const float TILT_MAX_ANGLE = 30.0f;
 // ------------------------------------------------------------
 // Arduino light sensor
 int arduinoLight = 0;
-const int LIGHT_THRESHOLD = 500; // Threshold for detecting darkness
+const int LIGHT_THRESHOLD = 350; // Threshold for detecting darkness
 
 // ------------------------------------------------------------
 // Arduino switch
@@ -945,6 +947,37 @@ void drawSmoke()
 
 	glDepthMask(GL_TRUE);
 	glDisable(GL_BLEND);
+}
+
+// Desenha o ícone do motor no HUD (coordenadas de ecrã, projeção ortográfica já ativa)
+void drawEngineIcon(float x, float y, float size)
+{
+	// Estado atual do motor: sem Arduino, consideramos o motor ligado
+	bool engineOn = false; //(arduinoSerial == INVALID_HANDLE_VALUE) || arduinoIgnition;
+
+	// Motor desligado: pisca (0.5s visível, 0.5s escondido)
+	if (!engineOn)
+	{
+		int blink = (glutGet(GLUT_ELAPSED_TIME) / 500) % 2;
+		if (blink == 0)
+			return;
+	}
+
+	renderer.setTexUnit(0, engineOn ? TEX_ENGINE_ON : TEX_ENGINE_OFF);
+
+	CarMaterial iconMaterial = {
+		{1.0f, 1.0f, 1.0f, 1.0f},
+		{1.0f, 1.0f, 1.0f, 1.0f},
+		{0.0f, 0.0f, 0.0f, 1.0f},
+		1.0f};
+	setMeshMaterial(MESH_CUBE, iconMaterial);
+
+	mu.pushMatrix(gmu::MODEL);
+	mu.translate(gmu::MODEL, x + size * 0.5f, y + size * 0.5f, 0.0f);
+	mu.scale(gmu::MODEL, size, size, 1.0f);
+	mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+	drawMesh(MESH_CUBE, 5);
+	mu.popMatrix(gmu::MODEL);
 }
 
 void updateCar(float dt)
@@ -2262,7 +2295,19 @@ void renderSim(void)
 		mu.loadIdentity(gmu::PROJECTION);
 		mu.ortho(m_viewport[0], m_viewport[0] + m_viewport[2] - 1, m_viewport[1], m_viewport[1] + m_viewport[3] - 1, -1, 1);
 		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-		float *hudPvm = mu.get(gmu::PROJ_VIEW_MODEL);
+		float hudPvm[16];
+		memcpy(hudPvm, mu.get(gmu::PROJ_VIEW_MODEL), 16 * sizeof(float));
+
+		// Ícone do motor (por baixo dos pontos)
+		renderer.activateRenderMeshesShaderProg();
+		renderer.setFog(false, fogColor);          // sem nevoeiro no HUD
+		renderer.setGlobalLight(true, globalLightPos);  // luz suficiente para não escurecer o ícone
+		float iconSize = 100.0f;
+		float iconX = WinX * 0.5f - iconSize * 0.5f;
+		float iconY = WinY - 20.0f - iconSize;   // 20 px de margem ao topo
+
+		drawEngineIcon(iconX, iconY, iconSize);
+		
 
 		// Vidas (canto superior esquerdo)
 		std::ostringstream livesStream;
@@ -2286,7 +2331,7 @@ void renderSim(void)
 		// Mensagens centrais: Game Over e Paused
 		if (!gameStarted)
 		{
-			TextCommand menuCmd = {std::string("AVTM Racing 2026!\nPress R to start!"),
+			TextCommand menuCmd = {std::string("AVTM Racing 2026!\n Start the engine."),
 								   {WinX / 2.0f - 150.0f, WinY / 2.0f},
 								   0.6f};
 			menuCmd.pvm = hudPvm;
@@ -2295,7 +2340,7 @@ void renderSim(void)
 		else if (gameOver)
 		{
 			std::ostringstream gameOverStream;
-			gameOverStream << "GAME OVER\nScore: " << points << "\nPress R to restart";
+			gameOverStream << "GAME OVER\nScore: " << points << "\n Restart the engine.";
 			TextCommand gameOverCmd = {gameOverStream.str(), {WinX / 2.0f - 150.0f, WinY / 2.0f}, 0.6f};
 
 			gameOverCmd.pvm = hudPvm;
@@ -2303,7 +2348,7 @@ void renderSim(void)
 		}
 		else if (paused)
 		{
-			TextCommand pausedCmd = {std::string("PAUSED\nPress P to resume"),
+			TextCommand pausedCmd = {std::string("PAUSED"),
 									 {WinX / 2.0f - 150.0f, WinY / 2.0f},
 									 0.5f};
 			pausedCmd.pvm = hudPvm;
@@ -2641,6 +2686,10 @@ void buildScene()
 	renderer.TexObjArray.texture2D_Loader("assets/orange.jpg");		// 6
 	renderer.TexObjArray.texture2D_Loader("assets/tire.png");		// 7
 	renderer.TexObjArray.texture2D_Loader("assets/license.png");	// 8
+
+
+	renderer.TexObjArray.texture2D_Loader("assets/engineoff.png");  // 9
+	renderer.TexObjArray.texture2D_Loader("assets/engineon.png");   // 10
 
 	// Scene geometry with triangle meshes
 

@@ -16,7 +16,7 @@ const float SIGN_BOX_HALF_W_MM  = 450.0f;  // zona à volta do ombro (largura/2)
 const float SIGN_BOX_HALF_H_MM  = 350.0f;  // zona à volta do ombro (altura/2)
 const float SIGN_MIN_AREA_CM2   = 60.0f;   // área mínima de cor para contar como placa
 const bool  DEBUG_SIGN          = false;    // imprime as áreas de vermelho e azul (quando > 5 cm2)
-const int   COLOR_EXPOSURE_US   = 16670;   // exposição fixa (µs). 2500 deixava as placas quase pretas; sobe/desce conforme a corMedia
+const int   COLOR_EXPOSURE_US   = 8330;   // exposição fixa (µs). 2500 deixava as placas quase pretas; sobe/desce conforme a corMedia
 const bool  DEBUG_STATUS        = false;    // imprime SEMPRE (3x/s) o estado de cada passo da deteção
 
 // ---- CHAMA (vela / isqueiro) ----
