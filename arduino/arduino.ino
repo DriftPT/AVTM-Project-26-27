@@ -4,21 +4,20 @@
 // ------------------------------------------------------------
 // SENSOR PINS
 
-#define LIGHT A3
-#define POT A0
-#define LED 6
-#define BUT 4
+#define LIGHT A2
+#define POT A1
+#define LED A0
+#define BUT 6
 
 
 bool button_state;
 int pot_value;
-int light_value;
+int light_value; 
 
-// Limites da chave com histerese
-const int IGNITION_ON = 650;
-const int IGNITION_OFF = 450;
+const int IGNITION_MOVEMENT = 100;
 
 bool engineOn = false;
+int ignitionReference = 0;
 
 void setup() {
   Serial.begin(9600);
@@ -35,20 +34,14 @@ void setup() {
   Accelerometer.begin();
 
   // IGNITION
-  int pot_value = analogRead(POT);
-  
-  if (!engineOn && pot_value >= IGNITION_ON) {
-    engineOn = true;
-    digitalWrite(LED, HIGH);
-  }
-  else if (engineOn && pot_value <= IGNITION_OFF) {
-    engineOn = false;
-    digitalWrite(LED, LOW);
-  }
+  pot_value = analogRead(POT);
+  ignitionReference = pot_value;
+
+  engineOn = false;
+  digitalWrite(LED, LOW);
 
   Oled.setCursor(0, 6);
-  Oled.print("Engine:");
-  Oled.print(engineOn ? "ON " : "OFF");
+  Oled.print("Engine:OFF");
 
 }
 
@@ -83,18 +76,42 @@ void loop() {
   Oled.print(light_value);
   Oled.print("   ");
 
+
   // ------------------------------------------------------------
-  // IGNITION
+  // IGNITION - Relative rotation
+
   pot_value = analogRead(POT);
 
-  if (!engineOn && pot_value >= IGNITION_ON) {
-    engineOn = true;
-    digitalWrite(LED, HIGH);
+  if (!engineOn) {
+
+    // Se rodarmos no sentido contrário, atualizamos a referência
+    if (pot_value < ignitionReference) {
+      ignitionReference = pot_value;
+    }
+
+    // Rodar 100 unidades para a direita liga
+    if (pot_value - ignitionReference >= IGNITION_MOVEMENT) {
+      engineOn = true;
+      ignitionReference = pot_value;
+    }
+
   }
-  else if (engineOn && pot_value <= IGNITION_OFF) {
-    engineOn = false;
-    digitalWrite(LED, LOW);
+  else {
+
+    // Se rodarmos no sentido contrário, atualizamos a referência
+    if (pot_value > ignitionReference) {
+      ignitionReference = pot_value;
+    }
+
+    // Rodar 100 unidades para a esquerda desliga
+    if (ignitionReference - pot_value >= IGNITION_MOVEMENT) {
+      engineOn = false;
+      ignitionReference = pot_value;
+    }
+
   }
+
+  digitalWrite(LED, engineOn ? HIGH : LOW);
 
   Oled.setCursor(0, 6);
   Oled.print("Engine:");

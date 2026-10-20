@@ -221,13 +221,13 @@ float arduinoThrottle = 0.0f;  // -1 = trás, +1 = frente
 float arduinoSteering = 0.0f;  // -1 = esquerda, +1 = direita
 
 // Configuração da inclinação (graus)
-const float TILT_DEADZONE = 5.0f;
-const float TILT_MAX_ANGLE = 30.0f;
+const float TILT_DEADZONE = 10.0f;
+const float TILT_MAX_ANGLE = 40.0f;
 
 // ------------------------------------------------------------
 // Arduino light sensor
 int arduinoLight = 0;
-const int LIGHT_THRESHOLD = 350; // Threshold for detecting darkness
+const int LIGHT_THRESHOLD = 100; // Threshold for detecting darkness
 
 // ------------------------------------------------------------
 // Arduino switch
@@ -953,7 +953,7 @@ void drawSmoke()
 void drawEngineIcon(float x, float y, float size)
 {
 	// Estado atual do motor: sem Arduino, consideramos o motor ligado
-	bool engineOn = false; //(arduinoSerial == INVALID_HANDLE_VALUE) || arduinoIgnition;
+	bool engineOn = (arduinoSerial == INVALID_HANDLE_VALUE) || arduinoIgnition;
 
 	// Motor desligado: pisca (0.5s visível, 0.5s escondido)
 	if (!engineOn)
@@ -2103,15 +2103,13 @@ void updateCarAudio()
 	if (!drivingSoundInitialized)
 		return;
 
-	bool engineOn =
-		(arduinoSerial == INVALID_HANDLE_VALUE || arduinoIgnition);
+	bool engineOn = (arduinoSerial == INVALID_HANDLE_VALUE || arduinoIgnition);
 
 	bool isDriving =
 		engineOn &&
 		gameStarted &&
 		!paused &&
-		!gameOver &&
-		fabsf(carVelocity) > 0.5f;
+		!gameOver;
 
 	if (isDriving && !drivingSoundPlaying)
 	{
